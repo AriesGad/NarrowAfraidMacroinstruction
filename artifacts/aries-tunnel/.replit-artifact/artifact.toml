@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "Aries Tunnel"
+description = "A premium Android VPN client interface for managing authorized VPN servers, access time, configuration profiles, logs, and connection preferences with local persistence."
+version = "1.0.0"
+id = "artifacts/aries-tunnel"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 25349
+
+[services.development]
+run = "pnpm --filter @workspace/aries-tunnel run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/aries-tunnel", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/aries-tunnel", "run", "serve" ]
+
+[services.env]
+PORT = "25349"
+BASE_PATH = "/"

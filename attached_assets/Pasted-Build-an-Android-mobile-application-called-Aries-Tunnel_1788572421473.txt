@@ -1,0 +1,290 @@
+Build an Android mobile application called Aries Tunnel VPN using React Native + Expo.
+
+The app is a legitimate VPN client for connecting to VPN servers that the user owns or is authorized to use.
+
+Design
+
+Use a modern premium red and black dark theme.
+
+The interface should feel like a professional VPN application:
+
+* Black/dark background
+* Red primary buttons and highlights
+* Rounded cards
+* Smooth animations
+* Clean typography
+* Responsive layout for different Android screen sizes
+* Use icons where appropriate
+* Keep the interface uncluttered
+
+Bottom Navigation
+
+Create four main tabs:
+
+1. Home
+2. Servers
+3. Tweaks
+4. Settings
+
+HOME SCREEN
+
+Create a large circular VPN button in the center.
+
+When disconnected:
+
+* Show a red circular button
+* Text: CONNECT
+* Status: Disconnected
+
+When connecting:
+
+* Animate the button
+* Text: CONNECTING...
+* Status: Connecting
+
+When connected:
+
+* Show the connected state
+* Text: DISCONNECT
+* Status: Connected
+* Display connection duration
+* Display selected server
+* Display upload and download statistics
+
+Below the VPN button display the VPN access timer.
+
+Example:
+
+VPN ACCESS
+
+03:59:59
+
+Add a prominent rewarded-ad button:
+
+WATCH AD +4 HOURS
+
+When the user has no remaining access:
+
+VPN ACCESS EXPIRED
+
+The VPN connection screen should not contain any ISP-bypass or unauthorized-access functionality.
+
+SERVERS SCREEN
+
+Create a server-selection interface.
+
+Each server should display:
+
+* Server name
+* Country/location
+* Ping/latency
+* Connection status
+
+Include:
+
+* Server dropdown/list
+* Refresh server list
+* Custom Server option
+
+Create the server architecture so legitimate VPN server configurations can be added later without redesigning the UI.
+
+Do not hard-code private credentials, passwords, private keys, or tokens.
+
+TWEAKS SCREEN
+
+Create a dropdown/list of predefined configuration profiles.
+
+Include example profiles such as:
+
+* Default
+* Stable
+* Fast
+* Low Data
+* Custom
+
+Add:
+
+Custom Tweak
+
+and
+
+Response Checker
+
+The response checker should only test connectivity to servers/endpoints that the user owns or is authorized to test.
+
+Keep the tweak system modular so additional legitimate VPN configuration options can be added later.
+
+VPN LOG
+
+Add a VPN log viewer accessible from the Home screen.
+
+Display:
+
+* Timestamp
+* Connection events
+* Connecting
+* Connected
+* Disconnected
+* DNS events
+* Network events
+* Errors
+
+Include:
+
+CLEAR LOG
+
+Do not log passwords, private keys, authentication tokens, or other secrets.
+
+SETTINGS SCREEN
+
+Create a professional settings menu with:
+
+* Forward UDP
+* Notification Sound
+* Vibrate
+* CPU Wakelock
+* Battery Optimization
+* Custom Tweak
+* Custom Server
+* Forward DNS
+* Mobile Network
+* Share Hotspot
+* Clear App Data
+* Response Checker
+
+Use switches, dropdowns, or appropriate Android controls.
+
+For Android-specific features, create proper service/API interfaces so native Android implementation can be added where required.
+
+REWARDED AD SYSTEM
+
+Create a dedicated RewardManager.
+
+The reward system should be designed for Google AdMob rewarded advertisements.
+
+The user must voluntarily choose:
+
+WATCH AD +4 HOURS
+
+Before showing the advertisement, clearly tell the user:
+
+Watch a rewarded ad to receive 4 hours of VPN access.
+
+Only grant the reward after the official rewarded-ad SDK reports that the user earned the reward.
+
+Never grant time merely because an ad started or was opened.
+
+When the reward is successfully earned:
+
++4 HOURS VPN ACCESS
+
+Add exactly 4 hours to the user’s existing access expiration time.
+
+If the user has 2 hours remaining and earns another reward, the new balance should become:
+
+6 HOURS
+
+Do not reset the timer when adding a reward.
+
+During development, use the official Google test rewarded-ad configuration.
+
+Keep the production AdMob ID configurable so it can be replaced later.
+
+ACCESS TIMER
+
+Do not store only a countdown number.
+
+Store an absolute expiration timestamp called:
+
+accessExpiresAt
+
+Calculate remaining time from:
+
+accessExpiresAt - currentTime
+
+Display:
+
+HH:MM:SS
+
+The timer must remain correct when:
+
+* The app is closed
+* The app is minimized
+* The phone is locked
+* The app is reopened
+* The device is restarted
+
+When the timer reaches zero:
+
+* Show 00:00:00
+* Mark VPN access as expired
+* Prevent a new VPN connection
+* Keep server configurations and settings intact
+
+VPN ARCHITECTURE
+
+Create a clean abstraction:
+
+VpnServiceManager
+
+The Android implementation should use Android’s official VpnService API.
+
+Separate:
+
+* UI
+* VPN state
+* VPN service
+* Server configuration
+* RewardManager
+* Timer/access entitlement
+* Logs
+* Settings
+
+Initially create the VPN service interface and connection-state architecture without pretending that a connection is working when no real VPN backend is configured.
+
+The application should clearly distinguish:
+
+UI prototype
+
+from
+
+Real VPN connection
+
+Do not fake a successful VPN connection.
+
+The actual tunnel implementation will be connected to a legitimate VPN protocol/server in the next development stage.
+
+STORAGE
+
+Use persistent local storage for:
+
+* Selected server
+* App settings
+* Access expiration timestamp
+* VPN preferences
+* Non-sensitive configuration
+
+Never store private credentials or secret keys in plain text.
+
+PROJECT QUALITY
+
+Create reusable components and organize the project cleanly.
+
+Use TypeScript where practical.
+
+Add proper error handling.
+
+Do not leave broken placeholder buttons.
+
+Make the initial project buildable and runnable on Android.
+
+At the end, explain:
+
+1. The project structure.
+2. How to run the Android app.
+3. Which parts are UI-only.
+4. Which parts still require the real VPN backend.
+5. Where the AdMob test configuration is located.
+6. What needs to be configured before a production release.
+
+Do not claim that the VPN is functional until a real authorized VPN backend has been connected and tested.
