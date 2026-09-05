@@ -20,6 +20,6 @@ export default function TabLayout() {
     <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Feather name="power" size={20} color={color} /> }} />
     <Tabs.Screen name="servers" options={{ title: 'Servers', tabBarIcon: ({ color }) => <Feather name="globe" size={20} color={color} /> }} />
     <Tabs.Screen name="tweaks" options={{ title: 'Tweaks', tabBarIcon: ({ color }) => <Feather name="sliders" size={20} color={color} /> }} />
-    <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: ({ color }) => <Feather name="settings" size={20} color={color} /> }} />
+    <Tabs.Screen name="logs" options={{ title: 'Logs', tabBarIcon: ({ color }) => <Feather name="list" size={20} color={color} /> }} />
   </Tabs>;
 }

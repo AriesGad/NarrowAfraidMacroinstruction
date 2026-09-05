@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import * as Network from 'expo-network';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { BUILT_IN_SERVERS } from '@/data/serverCatalog';
 import { BUILT_IN_TWEAKS } from '@/data/tweakCatalog';
@@ -78,6 +79,7 @@ type AppStateData = {
   selectedProfileId: string;
   accessExpiresAt: number | null;
   connectionStartedAt: number | null;
+  configVersion: string;
   settings: Settings;
   logs: AppLog[];
   customServers: Server[];
@@ -109,6 +111,7 @@ type AppStateContextValue = AppStateData & {
   testTweak: (id: string) => void;
   clearLogs: () => void;
   clearAppData: () => void;
+  updateConfig: () => Promise<{ success: boolean; message: string }>;
 };
 
 const STORAGE_KEY = 'aries-tunnel-state-v2';
@@ -118,6 +121,7 @@ const DEFAULT_STATE: AppStateData = {
   selectedProfileId: 'tweak-sg-stable',
   accessExpiresAt: null,
   connectionStartedAt: null,
+  configVersion: 'Local config',
   settings: { customTweak: false, forwardUdp: true, notificationSound: true, vibrate: true, cpuWakelock: false, batteryOptimization: false, forwardDns: true, mobileNetwork: true, shareHotspot: false },
   logs: [],
   customServers: [],
@@ -198,7 +202,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const requestConnection = useCallback(() => {
     setState((current) => {
       const message = isAccessExpired ? 'Access expired. Earn time before connecting.' : 'Unable to establish VPN connection: Android VpnService backend is not configured.';
-      return { ...current, status: 'unavailable', logs: [makeLog('ERROR', message), ...current.logs].slice(0, 100) };
+      const connectingLog = makeLog('CONNECTING', 'VPN connection requested. Checking access and authorized endpoint.');
+      return { ...current, status: 'unavailable', logs: [makeLog('ERROR', message), connectingLog, ...current.logs].slice(0, 100) };
     });
   }, [isAccessExpired]);
 
@@ -243,8 +248,45 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const testTweak = useCallback((id: string) => setState((current) => ({ ...current, logs: [makeLog('ERROR', 'Tweak test queued for authorized configuration only; backend is not connected.'), ...current.logs].slice(0, 100) })), []);
   const clearLogs = useCallback(() => setState((current) => ({ ...current, logs: [] })), []);
   const clearAppData = useCallback(() => { void Promise.all(state.customServers.flatMap((server) => [SecureStore.deleteItemAsync(secureKey('username', server.id)), SecureStore.deleteItemAsync(secureKey('password', server.id))])); setState(DEFAULT_STATE); }, [state.customServers]);
+  const updateConfig = useCallback(async () => {
+    const endpoint = process.env.EXPO_PUBLIC_CONFIG_URL?.trim();
+    if (!endpoint) return { success: false, message: 'Internet checks are ready, but a config endpoint has not been configured yet.' };
+    try {
+      const network = await Network.getNetworkStateAsync();
+      if (!network.isConnected || network.isInternetReachable === false) return { success: false, message: 'No internet connection is available. Try again when the device is online.' };
+      const response = await fetch(endpoint);
+      if (!response.ok) throw new Error('Config server returned HTTP ' + response.status + '.');
+      const payload = await response.json() as { version?: unknown };
+      const nextVersion = typeof payload.version === 'string' && payload.version.trim() ? payload.version.trim() : null;
+      if (!nextVersion) return { success: false, message: 'The config response did not include a valid version.' };
+      if (nextVersion === state.configVersion) return { success: true, message: 'Config is already up to date (' + nextVersion + ').' };
+      setState((current) => ({ ...current, configVersion: nextVersion, logs: [makeLog('NETWORK', 'Remote config updated to version ' + nextVersion + '.'), ...current.logs].slice(0, 100) }));
+      return { success: true, message: 'Config updated to version ' + nextVersion + '.' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The config update failed.';
+      setState((current) => ({ ...current, logs: [makeLog('ERROR', 'Config update failed: ' + message), ...current.logs].slice(0, 100) }));
+      return { success: false, message };
+    }
+  }, [state.configVersion]);
 
-  const value = useMemo<AppStateContextValue>(() => ({ ...state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData }), [state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData]);
+  useEffect(() => {
+    let cancelled = false;
+    const refreshWhenOnline = async () => {
+      const endpoint = process.env.EXPO_PUBLIC_CONFIG_URL?.trim();
+      if (!endpoint || cancelled) return;
+      try {
+        const network = await Network.getNetworkStateAsync();
+        if (!cancelled && network.isConnected && network.isInternetReachable !== false) void updateConfig();
+      } catch {
+        // A failed connectivity check should not interrupt the tunnel UI.
+      }
+    };
+    void refreshWhenOnline();
+    const timer = setInterval(() => { void refreshWhenOnline(); }, 60000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [updateConfig]);
+
+  const value = useMemo<AppStateContextValue>(() => ({ ...state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig }), [state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig]);
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 
