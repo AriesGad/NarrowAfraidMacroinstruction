@@ -25,6 +25,7 @@ export type Server = {
   category?: string;
   note?: string;
   hasPrivateKey?: boolean;
+  config?: CustomServerConfig;
 };
 
 export type Tweak = {
@@ -63,6 +64,25 @@ type Settings = {
   shareHotspot: boolean;
 };
 
+export type CustomServerConfig = {
+  openvpnType?: string;
+  openvpnConfig?: string;
+  dnsttPublicKey?: string;
+  udpTransfer?: string;
+  udpAlpn?: string;
+  udpPortHoppingInterval?: number;
+  udpAllowInsecure?: boolean;
+  v2rayProfile?: string;
+  v2rayHost?: string;
+  v2rayPort?: number;
+  v2rayUuid?: string;
+  v2rayFlow?: string;
+  v2rayNetwork?: string;
+  v2rayHeaderType?: string;
+  v2rayMux?: boolean;
+  v2raySecurity?: string;
+};
+
 export type CustomServerInput = {
   name: string;
   country: string;
@@ -74,6 +94,7 @@ export type CustomServerInput = {
   source: string;
   category: string;
   note: string;
+  config: CustomServerConfig;
 };
 
 export type CustomTweakInput = Omit<Tweak, 'id' | 'isCustom' | 'enabled' | 'provider'>;
