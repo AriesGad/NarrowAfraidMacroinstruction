@@ -48,6 +48,7 @@ export type AppLog = {
 };
 
 type Settings = {
+  customTweak: boolean;
   forwardUdp: boolean;
   notificationSound: boolean;
   vibrate: boolean;
@@ -117,7 +118,7 @@ const DEFAULT_STATE: AppStateData = {
   selectedProfileId: 'tweak-sg-stable',
   accessExpiresAt: null,
   connectionStartedAt: null,
-  settings: { forwardUdp: true, notificationSound: true, vibrate: true, cpuWakelock: false, batteryOptimization: false, forwardDns: true, mobileNetwork: true, shareHotspot: false },
+  settings: { customTweak: false, forwardUdp: true, notificationSound: true, vibrate: true, cpuWakelock: false, batteryOptimization: false, forwardDns: true, mobileNetwork: true, shareHotspot: false },
   logs: [],
   customServers: [],
   customTweaks: [],
