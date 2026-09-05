@@ -22,6 +22,9 @@ export type Server = {
   enabled: boolean;
   isCustom?: boolean;
   hasCredentials?: boolean;
+  category?: string;
+  note?: string;
+  hasPrivateKey?: boolean;
 };
 
 export type Tweak = {
@@ -69,6 +72,8 @@ export type CustomServerInput = {
   protocol: string;
   provider: string;
   source: string;
+  category: string;
+  note: string;
 };
 
 export type CustomTweakInput = Omit<Tweak, 'id' | 'isCustom' | 'enabled' | 'provider'>;
@@ -100,8 +105,8 @@ type AppStateContextValue = AppStateData & {
   requestConnection: () => void;
   disconnect: () => void;
   grantAccess: (hours: number) => void;
-  addCustomServer: (input: CustomServerInput, sshUsername: string, sshPassword: string) => Promise<void>;
-  editCustomServer: (id: string, input: CustomServerInput, sshUsername: string, sshPassword: string) => Promise<void>;
+  addCustomServer: (input: CustomServerInput, sshUsername: string, sshPassword: string, privateKey: string) => Promise<void>;
+  editCustomServer: (id: string, input: CustomServerInput, sshUsername: string, sshPassword: string, privateKey: string) => Promise<void>;
   deleteCustomServer: (id: string) => Promise<void>;
   testServer: (id: string) => void;
   addCustomTweak: (input: CustomTweakInput) => void;
@@ -134,7 +139,7 @@ function makeLog(type: AppLog['type'], message: string): AppLog {
   return { id: Date.now().toString() + Math.random().toString(36).slice(2, 8), time: new Date().toISOString(), type, message };
 }
 
-function secureKey(kind: 'username' | 'password', id: string) {
+function secureKey(kind: 'username' | 'password' | 'privateKey', id: string) {
   return 'aries-tunnel-' + kind + '-' + id;
 }
 
@@ -214,24 +219,27 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     return { ...current, accessExpiresAt: base + hours * 60 * 60 * 1000, logs: [makeLog('NETWORK', '+' + hours + ' hours VPN access added.'), ...current.logs].slice(0, 100) };
   }), []);
 
-  const addCustomServer = useCallback(async (input: CustomServerInput, sshUsername: string, sshPassword: string) => {
+  const addCustomServer = useCallback(async (input: CustomServerInput, sshUsername: string, sshPassword: string, privateKey: string) => {
     const id = 'custom-server-' + Date.now().toString();
-    const server: Server = { ...input, id, latency: null, enabled: Boolean(input.host), isCustom: true, hasCredentials: Boolean(sshUsername || sshPassword) };
+    const server: Server = { ...input, id, latency: null, enabled: Boolean(input.host), isCustom: true, hasCredentials: Boolean(sshUsername || sshPassword), hasPrivateKey: Boolean(privateKey) };
     if (sshUsername) await SecureStore.setItemAsync(secureKey('username', id), sshUsername);
     if (sshPassword) await SecureStore.setItemAsync(secureKey('password', id), sshPassword);
+    if (privateKey) await SecureStore.setItemAsync(secureKey('privateKey', id), privateKey);
     setState((current) => ({ ...current, customServers: [...current.customServers, server], selectedServerId: id, logs: [makeLog('NETWORK', 'Custom server profile saved locally with secure credentials.'), ...current.logs].slice(0, 100) }));
   }, []);
 
-  const editCustomServer = useCallback(async (id: string, input: CustomServerInput, sshUsername: string, sshPassword: string) => {
-    const server: Server = { ...input, id, latency: null, enabled: Boolean(input.host), isCustom: true, hasCredentials: Boolean(sshUsername || sshPassword) };
+  const editCustomServer = useCallback(async (id: string, input: CustomServerInput, sshUsername: string, sshPassword: string, privateKey: string) => {
+    const server: Server = { ...input, id, latency: null, enabled: Boolean(input.host), isCustom: true, hasCredentials: Boolean(sshUsername || sshPassword), hasPrivateKey: Boolean(privateKey) };
     if (sshUsername) await SecureStore.setItemAsync(secureKey('username', id), sshUsername);
     if (sshPassword) await SecureStore.setItemAsync(secureKey('password', id), sshPassword);
+    if (privateKey) await SecureStore.setItemAsync(secureKey('privateKey', id), privateKey);
     setState((current) => ({ ...current, customServers: current.customServers.map((item) => item.id === id ? server : item), logs: [makeLog('NETWORK', 'Custom server profile updated.'), ...current.logs].slice(0, 100) }));
   }, []);
 
   const deleteCustomServer = useCallback(async (id: string) => {
     await SecureStore.deleteItemAsync(secureKey('username', id));
     await SecureStore.deleteItemAsync(secureKey('password', id));
+    await SecureStore.deleteItemAsync(secureKey('privateKey', id));
     setState((current) => ({ ...current, customServers: current.customServers.filter((item) => item.id !== id), selectedServerId: current.selectedServerId === id ? 'random-fastest' : current.selectedServerId, logs: [makeLog('NETWORK', 'Custom server profile deleted.'), ...current.logs].slice(0, 100) }));
   }, []);
 
@@ -247,7 +255,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const deleteCustomTweak = useCallback((id: string) => setState((current) => ({ ...current, customTweaks: current.customTweaks.filter((item) => item.id !== id), selectedProfileId: current.selectedProfileId === id ? 'tweak-sg-stable' : current.selectedProfileId })), []);
   const testTweak = useCallback((id: string) => setState((current) => ({ ...current, logs: [makeLog('ERROR', 'Tweak test queued for authorized configuration only; backend is not connected.'), ...current.logs].slice(0, 100) })), []);
   const clearLogs = useCallback(() => setState((current) => ({ ...current, logs: [] })), []);
-  const clearAppData = useCallback(() => { void Promise.all(state.customServers.flatMap((server) => [SecureStore.deleteItemAsync(secureKey('username', server.id)), SecureStore.deleteItemAsync(secureKey('password', server.id))])); setState(DEFAULT_STATE); }, [state.customServers]);
+  const clearAppData = useCallback(() => { void Promise.all(state.customServers.flatMap((server) => [SecureStore.deleteItemAsync(secureKey('username', server.id)), SecureStore.deleteItemAsync(secureKey('password', server.id)), SecureStore.deleteItemAsync(secureKey('privateKey', server.id))])); setState(DEFAULT_STATE); }, [state.customServers]);
   const updateConfig = useCallback(async () => {
     const endpoint = process.env.EXPO_PUBLIC_CONFIG_URL?.trim();
     if (!endpoint) return { success: false, message: 'Internet checks are ready, but a config endpoint has not been configured yet.' };

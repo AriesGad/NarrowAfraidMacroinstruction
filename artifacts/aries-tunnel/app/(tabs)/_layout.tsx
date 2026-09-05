@@ -18,7 +18,7 @@ export default function TabLayout() {
     tabBarBackground: () => isWeb ? <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} /> : <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />,
   }}>
     <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Feather name="power" size={20} color={color} /> }} />
-    <Tabs.Screen name="servers" options={{ title: 'Servers', tabBarIcon: ({ color }) => <Feather name="globe" size={20} color={color} /> }} />
+    <Tabs.Screen name="servers" options={{ title: 'Add Server', tabBarIcon: ({ color }) => <Feather name="plus-circle" size={20} color={color} /> }} />
     <Tabs.Screen name="tweaks" options={{ title: 'Tweaks', tabBarIcon: ({ color }) => <Feather name="sliders" size={20} color={color} /> }} />
     <Tabs.Screen name="logs" options={{ title: 'Logs', tabBarIcon: ({ color }) => <Feather name="list" size={20} color={color} /> }} />
   </Tabs>;
