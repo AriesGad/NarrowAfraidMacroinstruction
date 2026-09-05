@@ -1,0 +1,408 @@
+Continue building Aries Tunnel VPN as an Android application using React Native/Expo and the existing project.
+
+Preserve the existing red-and-black design and all previously implemented functionality.
+
+1. BUILT-IN VPN SERVERS
+
+Add a Built-in Servers section directly below the main VPN connection area on the Home screen.
+
+Provide a server dropdown containing:
+
+* Random / Fastest
+* 🇸🇬 Singapore
+* 🇺🇸 United States
+* 🇧🇷 Brazil
+* 🇫🇷 France
+* 🇩🇪 Germany
+* 🇳🇱 Netherlands
+* 🇦🇺 Australia
+* 🇮🇳 India
+* 🇨🇦 Canada
+
+Use legitimate publicly available OpenVPN servers where their operators explicitly permit public client connections.
+
+Do not embed passwords, private keys, or credentials that are not authorized for redistribution.
+
+Random / Fastest
+
+When the user selects:
+
+Random / Fastest
+
+test the available authorized server endpoints and select the server with the best measured latency/reliability.
+
+Do not simply choose randomly if a latency test is available.
+
+Display:
+
+Finding fastest server...
+
+then:
+
+Connected to Singapore
+
+or the appropriate location.
+
+Keep the server provider/source information available in the server details screen.
+
+2. CUSTOM SERVER
+
+Add:
+
++ CUSTOM SERVER
+
+Allow the user to create a custom authorized server profile.
+
+Fields:
+
+* Server Name
+* Host
+* SSH Username
+* SSH Port
+* SSH Password
+* OpenVPN configuration/import where applicable
+
+Provide Save, Edit, Delete, and Test Connection controls.
+
+Passwords must be stored securely using Android’s secure storage mechanisms.
+
+Never display passwords in VPN logs.
+
+Do not transmit credentials anywhere except the configured authorized server.
+
+3. BUILT-IN TWEAKS
+
+Place the Built-in Tweaks section below the server section on the Home screen.
+
+Each tweak should display:
+
+* Country flag
+* Country name
+* Tweak name
+* Connection method
+
+Example:
+
+🇸🇬 Singapore
+Singapore Stable
+SSL/TLS
+
+🇺🇸 United States
+USA Fast
+Direct SSH
+
+Make the built-in tweak database modular.
+
+The developer should be able to add/edit configurations without redesigning the application.
+
+Store configuration templates separately from UI components.
+
+Do not include configurations intended to circumvent carrier billing, network restrictions, authentication, or unauthorized access controls.
+
+4. CUSTOM TWEAKS
+
+Create:
+
++ CUSTOM TWEAK
+
+Allow users to create their own legitimate VPN/proxy connection profiles.
+
+Fields:
+
+Tweak Name
+
+Text field.
+
+Connection Type
+
+Dropdown:
+
+* Direct SSH
+* SSL/TLS
+* HTTP
+* WebSocket
+
+Payload / Request Configuration
+
+Provide a configuration editor for HTTP request/header information used with an authorized proxy/server.
+
+SNI
+
+Text field:
+
+SNI / Server Name
+
+Proxy
+
+Fields:
+
+Proxy Host
+
+Proxy Port
+
+Port
+
+Connection port field.
+
+Provide:
+
+* Save
+* Edit
+* Duplicate
+* Delete
+* Test
+
+Custom tweaks should be stored locally.
+
+Do not execute arbitrary shell commands supplied through a tweak.
+
+Do not implement ISP-bypass or unauthorized network-access mechanisms.
+
+5. RESPONSE CHECKER
+
+Create a dedicated screen named:
+
+Response Checker
+
+When opened, display:
+
+Enter host, proxy, or endpoint to test
+
+Fields:
+
+Host / URL
+
+Port
+
+SNI
+
+Proxy Host
+
+Proxy Port
+
+Custom Headers
+
+HTTP Method
+
+Provide a dropdown containing:
+
+* GET
+* POST
+* HEAD
+* DELETE
+* OPTIONS
+* PATCH
+
+Test
+
+Add a large:
+
+CHECK
+
+button.
+
+Display results including:
+
+* Reachable / Unreachable
+* HTTP status code
+* Response time
+* TLS connection status
+* SNI/TLS hostname result
+* Redirect information
+* Basic response headers
+* Connection error if unsuccessful
+
+For example:
+
+ONLINE
+
+HTTP 200 OK
+
+Response: 184 ms
+
+TLS: Compatible
+
+Do not claim that an endpoint is compatible with a VPN tunnel merely because it returns HTTP 200.
+
+Only test endpoints the user is authorized to test.
+
+Never expose response bodies containing potentially sensitive information unnecessarily.
+
+6. HOTSPOT SHARING
+
+Add:
+
+Share Hotspot
+
+inside Settings.
+
+When selected, open a dedicated Hotspot Sharing screen.
+
+Display:
+
+VPN HOTSPOT SHARING
+
+Show the local proxy address and port that other devices should use when Android permits the configured VPN/proxy-sharing architecture.
+
+Example UI:
+
+Proxy
+192.168.x.x
+
+Port
+8080
+
+Add:
+
+COPY PROXY
+
+and:
+
+COPY PORT
+
+Include a simple instructional note:
+
+Connect the other device to the same Wi-Fi/hotspot network, then enter the proxy address and port shown above in that device's network proxy settings.
+
+Clearly explain that Android/device manufacturer restrictions may prevent VPN traffic from being shared through a hotspot.
+
+Do not pretend hotspot sharing is active unless the Android networking implementation has actually established it.
+
+Show:
+
+Sharing Active
+
+or:
+
+Sharing Unavailable
+
+based on the actual state.
+
+7. HOME SCREEN ORDER
+
+The Home screen should have this order:
+
+1. Aries Tunnel VPN title/logo
+2. VPN access countdown
+3. Large VPN ON/OFF button
+4. Connection status
+5. Current server
+6. Connection statistics
+7. WATCH AD +4 HOURS
+8. Built-in Servers
+9. Built-in Tweaks
+10. VPN Log shortcut
+
+Keep the interface clean and scrollable.
+
+8. SECURITY
+
+Use secure Android storage for credentials.
+
+Never:
+
+* Put passwords in source code.
+* Put private keys in source code.
+* Display passwords in logs.
+* Upload user credentials to an unrelated service.
+* Execute arbitrary user-provided shell commands.
+* Implement unauthorized network-access or carrier-bypass functionality.
+
+9. ARCHITECTURE
+
+Organize the project into separate modules:
+
+VpnServiceManager
+
+ServerManager
+
+TweakManager
+
+RewardManager
+
+AccessTimer
+
+ResponseChecker
+
+HotspotManager
+
+SettingsManager
+
+LogManager
+
+Use TypeScript interfaces/types for server and tweak configurations.
+
+Example conceptual server object:
+
+Server:
+
+* id
+* name
+* country
+* flag
+* host
+* port
+* protocol
+* provider
+* latency
+* enabled
+
+Example tweak object:
+
+Tweak:
+
+* id
+* name
+* country
+* flag
+* connectionType
+* host
+* port
+* sni
+* proxyHost
+* proxyPort
+* payloadConfiguration
+
+Do not put passwords into ordinary tweak objects.
+
+10. IMPORTANT VPN REQUIREMENT
+
+The application must use Android’s legitimate VPN APIs for the actual VPN connection.
+
+Do not simulate a connected state.
+
+When the user presses CONNECT:
+
+Disconnected → Connecting → Connected
+
+only after the underlying VPN service actually establishes a working tunnel.
+
+If no compatible server configuration exists, show:
+
+Unable to establish VPN connection
+
+with the relevant error.
+
+Keep the VPN backend modular so OpenVPN or another legitimate VPN implementation can be integrated and tested independently of the UI.
+
+11. TESTING
+
+Create test/demo configurations that do not contain real credentials.
+
+Make it possible to test:
+
+* Server selection
+* Fastest-server selection
+* Custom server creation
+* Custom tweak creation
+* Response checker
+* Countdown timer
+* Rewarded-ad flow
+* VPN state changes
+* Logs
+* Settings
+* Hotspot-sharing UI
+
+Do not present demo/test connections as real VPN connections.
+
+Finally, verify that the Android project builds successfully and explain any native Android components that still need implementation.

@@ -1,0 +1,1 @@
+- [Expo dependency installation](expo-dependency-install.md) — target the Expo workspace package explicitly when adding native modules.

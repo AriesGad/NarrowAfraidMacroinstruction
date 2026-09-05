@@ -1,21 +1,49 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { BUILT_IN_SERVERS } from '@/data/serverCatalog';
+import { BUILT_IN_TWEAKS } from '@/data/tweakCatalog';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'unavailable';
+export type FastestStatus = 'idle' | 'finding' | 'selected' | 'unavailable';
 
 export type Server = {
   id: string;
   name: string;
-  location: string;
-  ping: number;
-  available: boolean;
+  country: string;
+  flag: string;
+  host: string;
+  port: number;
+  protocol: string;
+  provider: string;
+  source: string;
+  latency: number | null;
+  enabled: boolean;
+  isCustom?: boolean;
+  hasCredentials?: boolean;
+};
+
+export type Tweak = {
+  id: string;
+  name: string;
+  country: string;
+  flag: string;
+  connectionType: 'Direct SSH' | 'SSL/TLS' | 'HTTP' | 'WebSocket';
+  host: string;
+  port: number;
+  sni: string;
+  proxyHost: string;
+  proxyPort: number;
+  payloadConfiguration: string;
+  provider: string;
+  enabled: boolean;
   isCustom?: boolean;
 };
 
 export type AppLog = {
   id: string;
   time: string;
-  type: 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'DNS' | 'NETWORK' | 'ERROR';
+  type: 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'DNS' | 'NETWORK' | 'ERROR' | 'CHECK';
   message: string;
 };
 
@@ -30,80 +58,93 @@ type Settings = {
   shareHotspot: boolean;
 };
 
+export type CustomServerInput = {
+  name: string;
+  country: string;
+  flag: string;
+  host: string;
+  port: number;
+  protocol: string;
+  provider: string;
+  source: string;
+};
+
+export type CustomTweakInput = Omit<Tweak, 'id' | 'isCustom' | 'enabled' | 'provider'>;
+
 type AppStateData = {
   status: ConnectionStatus;
   selectedServerId: string;
-  selectedProfile: string;
+  selectedProfileId: string;
   accessExpiresAt: number | null;
   connectionStartedAt: number | null;
   settings: Settings;
   logs: AppLog[];
-  customServer: Server | null;
+  customServers: Server[];
+  customTweaks: Tweak[];
 };
 
 type AppStateContextValue = AppStateData & {
   servers: Server[];
+  tweaks: Tweak[];
   accessRemainingSeconds: number;
   isAccessExpired: boolean;
+  fastestStatus: FastestStatus;
+  fastestMessage: string;
   selectServer: (serverId: string) => void;
-  selectProfile: (profile: string) => void;
+  findFastestServer: () => Promise<void>;
+  selectProfile: (profileId: string) => void;
   toggleSetting: (key: keyof Settings) => void;
   requestConnection: () => void;
   disconnect: () => void;
   grantAccess: (hours: number) => void;
-  addCustomServer: (name: string, location: string) => void;
+  addCustomServer: (input: CustomServerInput, sshUsername: string, sshPassword: string) => Promise<void>;
+  editCustomServer: (id: string, input: CustomServerInput, sshUsername: string, sshPassword: string) => Promise<void>;
+  deleteCustomServer: (id: string) => Promise<void>;
+  testServer: (id: string) => void;
+  addCustomTweak: (input: CustomTweakInput) => void;
+  editCustomTweak: (id: string, input: CustomTweakInput) => void;
+  duplicateTweak: (id: string) => void;
+  deleteCustomTweak: (id: string) => void;
+  testTweak: (id: string) => void;
   clearLogs: () => void;
   clearAppData: () => void;
 };
 
-const STORAGE_KEY = 'aries-tunnel-state-v1';
-const DEFAULT_SERVERS: Server[] = [
-  { id: 'nyc-1', name: 'New York / 01', location: 'United States', ping: 24, available: true },
-  { id: 'lon-1', name: 'London / 01', location: 'United Kingdom', ping: 86, available: true },
-  { id: 'sin-1', name: 'Singapore / 01', location: 'Singapore', ping: 178, available: true },
-];
-
+const STORAGE_KEY = 'aries-tunnel-state-v2';
 const DEFAULT_STATE: AppStateData = {
   status: 'disconnected',
-  selectedServerId: 'nyc-1',
-  selectedProfile: 'Default',
+  selectedServerId: 'random-fastest',
+  selectedProfileId: 'tweak-sg-stable',
   accessExpiresAt: null,
   connectionStartedAt: null,
-  settings: {
-    forwardUdp: true,
-    notificationSound: true,
-    vibrate: true,
-    cpuWakelock: false,
-    batteryOptimization: false,
-    forwardDns: true,
-    mobileNetwork: true,
-    shareHotspot: false,
-  },
+  settings: { forwardUdp: true, notificationSound: true, vibrate: true, cpuWakelock: false, batteryOptimization: false, forwardDns: true, mobileNetwork: true, shareHotspot: false },
   logs: [],
-  customServer: null,
+  customServers: [],
+  customTweaks: [],
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
 
 function makeLog(type: AppLog['type'], message: string): AppLog {
-  return {
-    id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
-    time: new Date().toISOString(),
-    type,
-    message,
-  };
+  return { id: Date.now().toString() + Math.random().toString(36).slice(2, 8), time: new Date().toISOString(), type, message };
+}
+
+function secureKey(kind: 'username' | 'password', id: string) {
+  return 'aries-tunnel-' + kind + '-' + id;
 }
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppStateData>(DEFAULT_STATE);
   const [now, setNow] = useState<number>(Date.now());
+  const [fastestStatus, setFastestStatus] = useState<FastestStatus>('idle');
+  const [fastestMessage, setFastestMessage] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
       if (!saved) return;
       try {
-        const parsed = JSON.parse(saved) as Partial<AppStateData>;
-        setState({ ...DEFAULT_STATE, ...parsed, settings: { ...DEFAULT_STATE.settings, ...parsed.settings } });
+        const parsed = JSON.parse(saved) as Partial<AppStateData> & { customServer?: Server | null };
+        setState({ ...DEFAULT_STATE, ...parsed, customServers: parsed.customServers ?? (parsed.customServer ? [parsed.customServer] : []), customTweaks: parsed.customTweaks ?? [], settings: { ...DEFAULT_STATE.settings, ...parsed.settings } });
       } catch {
         setState(DEFAULT_STATE);
       }
@@ -119,73 +160,90 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
   }, [state]);
 
-  const servers = useMemo(() => (state.customServer ? [...DEFAULT_SERVERS, state.customServer] : DEFAULT_SERVERS), [state.customServer]);
+  const servers = useMemo(() => [...BUILT_IN_SERVERS, ...state.customServers], [state.customServers]);
+  const tweaks = useMemo(() => [...BUILT_IN_TWEAKS, ...state.customTweaks], [state.customTweaks]);
   const accessRemainingSeconds = Math.max(0, Math.floor(((state.accessExpiresAt ?? 0) - now) / 1000));
   const isAccessExpired = accessRemainingSeconds === 0;
 
+  const findFastestServer = useCallback(async () => {
+    setFastestStatus('finding');
+    setFastestMessage('Finding fastest server...');
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    const eligible = servers.filter((server) => server.id !== 'random-fastest' && server.enabled && Boolean(server.host) && server.latency !== null).sort((a, b) => (a.latency ?? 9999) - (b.latency ?? 9999));
+    if (!eligible[0]) {
+      setFastestStatus('unavailable');
+      setFastestMessage('No authorized endpoint is configured.');
+      setState((current) => ({ ...current, logs: [makeLog('ERROR', 'Fastest-server check found no authorized endpoint.'), ...current.logs].slice(0, 100) }));
+      return;
+    }
+    setFastestStatus('selected');
+    setFastestMessage('Connected to ' + eligible[0].country + ' in the selection preview.');
+    setState((current) => ({ ...current, selectedServerId: eligible[0].id, logs: [makeLog('NETWORK', 'Fastest authorized endpoint selected: ' + eligible[0].country + '.'), ...current.logs].slice(0, 100) }));
+  }, [servers]);
+
   const selectServer = useCallback((serverId: string) => {
+    if (serverId === 'random-fastest') {
+      void findFastestServer();
+      return;
+    }
+    setFastestStatus('idle');
+    setFastestMessage('');
     setState((current) => ({ ...current, selectedServerId: serverId }));
-  }, []);
+  }, [findFastestServer]);
 
-  const selectProfile = useCallback((profile: string) => {
-    setState((current) => ({ ...current, selectedProfile: profile }));
-  }, []);
-
-  const toggleSetting = useCallback((key: keyof Settings) => {
-    setState((current) => ({ ...current, settings: { ...current.settings, [key]: !current.settings[key] } }));
-  }, []);
+  const selectProfile = useCallback((profileId: string) => setState((current) => ({ ...current, selectedProfileId: profileId })), []);
+  const toggleSetting = useCallback((key: keyof Settings) => setState((current) => ({ ...current, settings: { ...current.settings, [key]: !current.settings[key] } })), []);
 
   const requestConnection = useCallback(() => {
     setState((current) => {
-      const message = isAccessExpired ? 'Access expired. Earn time before connecting.' : 'Tunnel backend not configured. No connection started.';
+      const message = isAccessExpired ? 'Access expired. Earn time before connecting.' : 'Unable to establish VPN connection: Android VpnService backend is not configured.';
       return { ...current, status: 'unavailable', logs: [makeLog('ERROR', message), ...current.logs].slice(0, 100) };
     });
   }, [isAccessExpired]);
 
-  const disconnect = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      status: 'disconnected',
-      connectionStartedAt: null,
-      logs: [makeLog('DISCONNECTED', 'Tunnel disconnected by user.'), ...current.logs].slice(0, 100),
-    }));
+  const disconnect = useCallback(() => setState((current) => ({ ...current, status: 'disconnected', connectionStartedAt: null, logs: [makeLog('DISCONNECTED', 'Tunnel disconnected by user.'), ...current.logs].slice(0, 100) })), []);
+
+  const grantAccess = useCallback((hours: number) => setState((current) => {
+    const base = Math.max(current.accessExpiresAt ?? 0, Date.now());
+    return { ...current, accessExpiresAt: base + hours * 60 * 60 * 1000, logs: [makeLog('NETWORK', '+' + hours + ' hours VPN access added.'), ...current.logs].slice(0, 100) };
+  }), []);
+
+  const addCustomServer = useCallback(async (input: CustomServerInput, sshUsername: string, sshPassword: string) => {
+    const id = 'custom-server-' + Date.now().toString();
+    const server: Server = { ...input, id, latency: null, enabled: Boolean(input.host), isCustom: true, hasCredentials: Boolean(sshUsername || sshPassword) };
+    if (sshUsername) await SecureStore.setItemAsync(secureKey('username', id), sshUsername);
+    if (sshPassword) await SecureStore.setItemAsync(secureKey('password', id), sshPassword);
+    setState((current) => ({ ...current, customServers: [...current.customServers, server], selectedServerId: id, logs: [makeLog('NETWORK', 'Custom server profile saved locally with secure credentials.'), ...current.logs].slice(0, 100) }));
   }, []);
 
-  const grantAccess = useCallback((hours: number) => {
-    setState((current) => {
-      const base = Math.max(current.accessExpiresAt ?? 0, Date.now());
-      return {
-        ...current,
-        accessExpiresAt: base + hours * 60 * 60 * 1000,
-        logs: [makeLog('NETWORK', '+' + hours + ' hours VPN access added.'), ...current.logs].slice(0, 100),
-      };
-    });
+  const editCustomServer = useCallback(async (id: string, input: CustomServerInput, sshUsername: string, sshPassword: string) => {
+    const server: Server = { ...input, id, latency: null, enabled: Boolean(input.host), isCustom: true, hasCredentials: Boolean(sshUsername || sshPassword) };
+    if (sshUsername) await SecureStore.setItemAsync(secureKey('username', id), sshUsername);
+    if (sshPassword) await SecureStore.setItemAsync(secureKey('password', id), sshPassword);
+    setState((current) => ({ ...current, customServers: current.customServers.map((item) => item.id === id ? server : item), logs: [makeLog('NETWORK', 'Custom server profile updated.'), ...current.logs].slice(0, 100) }));
   }, []);
 
-  const addCustomServer = useCallback((name: string, location: string) => {
-    const custom: Server = { id: 'custom-' + Date.now().toString(), name, location, ping: 0, available: false, isCustom: true };
-    setState((current) => ({ ...current, customServer: custom, selectedServerId: custom.id, logs: [makeLog('NETWORK', 'Custom server saved locally.'), ...current.logs].slice(0, 100) }));
+  const deleteCustomServer = useCallback(async (id: string) => {
+    await SecureStore.deleteItemAsync(secureKey('username', id));
+    await SecureStore.deleteItemAsync(secureKey('password', id));
+    setState((current) => ({ ...current, customServers: current.customServers.filter((item) => item.id !== id), selectedServerId: current.selectedServerId === id ? 'random-fastest' : current.selectedServerId, logs: [makeLog('NETWORK', 'Custom server profile deleted.'), ...current.logs].slice(0, 100) }));
   }, []);
 
+  const testServer = useCallback((id: string) => {
+    const server = servers.find((item) => item.id === id);
+    const message = !server?.host ? 'Unable to test server: no authorized host is configured.' : 'Server test queued, but no Android VPN backend is connected yet.';
+    setState((current) => ({ ...current, logs: [makeLog('ERROR', message), ...current.logs].slice(0, 100) }));
+  }, [servers]);
+
+  const addCustomTweak = useCallback((input: CustomTweakInput) => setState((current) => ({ ...current, customTweaks: [...current.customTweaks, { ...input, id: 'custom-tweak-' + Date.now().toString(), provider: 'Local profile', enabled: Boolean(input.host), isCustom: true }], logs: [makeLog('NETWORK', 'Custom tweak saved locally.'), ...current.logs].slice(0, 100) })), []);
+  const editCustomTweak = useCallback((id: string, input: CustomTweakInput) => setState((current) => ({ ...current, customTweaks: current.customTweaks.map((item) => item.id === id ? { ...input, id, provider: 'Local profile', enabled: Boolean(input.host), isCustom: true } : item) })), []);
+  const duplicateTweak = useCallback((id: string) => setState((current) => { const source = current.customTweaks.find((item) => item.id === id); return source ? { ...current, customTweaks: [...current.customTweaks, { ...source, id: 'custom-tweak-' + Date.now().toString(), name: source.name + ' Copy' }] } : current; }), []);
+  const deleteCustomTweak = useCallback((id: string) => setState((current) => ({ ...current, customTweaks: current.customTweaks.filter((item) => item.id !== id), selectedProfileId: current.selectedProfileId === id ? 'tweak-sg-stable' : current.selectedProfileId })), []);
+  const testTweak = useCallback((id: string) => setState((current) => ({ ...current, logs: [makeLog('ERROR', 'Tweak test queued for authorized configuration only; backend is not connected.'), ...current.logs].slice(0, 100) })), []);
   const clearLogs = useCallback(() => setState((current) => ({ ...current, logs: [] })), []);
-  const clearAppData = useCallback(() => setState(DEFAULT_STATE), []);
+  const clearAppData = useCallback(() => { void Promise.all(state.customServers.flatMap((server) => [SecureStore.deleteItemAsync(secureKey('username', server.id)), SecureStore.deleteItemAsync(secureKey('password', server.id))])); setState(DEFAULT_STATE); }, [state.customServers]);
 
-  const value = useMemo<AppStateContextValue>(() => ({
-    ...state,
-    servers,
-    accessRemainingSeconds,
-    isAccessExpired,
-    selectServer,
-    selectProfile,
-    toggleSetting,
-    requestConnection,
-    disconnect,
-    grantAccess,
-    addCustomServer,
-    clearLogs,
-    clearAppData,
-  }), [state, servers, accessRemainingSeconds, isAccessExpired, selectServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, clearLogs, clearAppData]);
-
+  const value = useMemo<AppStateContextValue>(() => ({ ...state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData }), [state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData]);
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 
@@ -196,8 +254,4 @@ export function useAppState() {
 }
 
 export const REWARDED_AD_TEST_ID = 'ca-app-pub-3940256099942544/5224354917';
-export const RewardManager = {
-  async showRewardedAd(): Promise<boolean> {
-    return false;
-  },
-};
+export const RewardManager = { async showRewardedAd(): Promise<boolean> { return false; } };

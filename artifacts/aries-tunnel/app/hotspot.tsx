@@ -1,0 +1,21 @@
+import React from 'react';
+import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Header, Label, PrimaryButton, Screen, Surface } from '@/components/Primitives';
+import { useAppState } from '@/context/AppStateContext';
+import { useColors } from '@/hooks/useColors';
+
+export default function HotspotScreen() {
+  const colors = useColors();
+  const router = useRouter();
+  const { settings } = useAppState();
+  const proxy = '192.168.x.x';
+  const port = '8080';
+  const copy = async (value: string, label: string) => { await Clipboard.setStringAsync(value); Alert.alert(label + ' copied', 'The value is ready to paste into the other device’s proxy settings.'); };
+  return <Screen><Header eyebrow="Sharing" title="VPN Hotspot Sharing" action="BACK" onAction={() => router.back()} /><Surface style={styles.statusCard}><View style={[styles.statusIcon, { backgroundColor: colors.accent }]}><Ionicons name="wifi-outline" size={24} color={colors.primary} /></View><View style={{ flex: 1 }}><Label>Android networking state</Label><Text style={[styles.statusTitle, { color: colors.primary }]}>Sharing Unavailable</Text><Text style={[styles.statusText, { color: colors.mutedForeground }]}>No native VPN/proxy-sharing service has established a hotspot tunnel.</Text></View></Surface><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Connection details</Text><Surface><View style={styles.detailLine}><View><Label>Proxy</Label><Text style={[styles.detailValue, { color: colors.foreground }]}>{proxy}</Text></View><Pressable onPress={() => { void copy(proxy, 'Proxy address'); }} style={({ pressed }) => [styles.copyButton, { backgroundColor: colors.secondary }, pressed && styles.pressed]}><Ionicons name="copy-outline" size={17} color={colors.primary} /><Text style={[styles.copyText, { color: colors.foreground }]}>COPY PROXY</Text></Pressable></View><View style={styles.detailLine}><View><Label>Port</Label><Text style={[styles.detailValue, { color: colors.foreground }]}>{port}</Text></View><Pressable onPress={() => { void copy(port, 'Port'); }} style={({ pressed }) => [styles.copyButton, { backgroundColor: colors.secondary }, pressed && styles.pressed]}><Ionicons name="copy-outline" size={17} color={colors.primary} /><Text style={[styles.copyText, { color: colors.foreground }]}>COPY PORT</Text></Pressable></View></Surface><View style={[styles.note, { backgroundColor: colors.secondary }]}><Ionicons name="information-circle-outline" size={20} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>Connect the other device to the same Wi-Fi or hotspot network, then enter the proxy address and port shown above in that device’s network proxy settings. Android and device-manufacturer restrictions may prevent VPN traffic from being shared through a hotspot.</Text></View><PrimaryButton title={settings.shareHotspot ? 'SHARING REQUESTED — NATIVE SERVICE REQUIRED' : 'ENABLE FROM SETTINGS'} icon="settings-outline" secondary onPress={() => router.back()} /></Screen>;
+}
+
+const styles = StyleSheet.create({ statusCard: { flexDirection: 'row', gap: 13, alignItems: 'flex-start' }, statusIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, statusTitle: { fontFamily: 'Inter_700Bold', fontSize: 18, marginTop: 7 }, statusText: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, marginTop: 5 }, sectionTitle: { fontFamily: 'Inter_700Bold', fontSize: 17, marginTop: 26, marginBottom: 11 }, detailLine: { minHeight: 66, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }, detailValue: { fontFamily: 'Inter_700Bold', fontSize: 18, marginTop: 7 }, copyButton: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 10 }, copyText: { fontFamily: 'Inter_700Bold', fontSize: 10 }, note: { flexDirection: 'row', gap: 10, padding: 15, borderRadius: 16, marginTop: 16 }, noteText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 }, pressed: { opacity: 0.75 },
+});

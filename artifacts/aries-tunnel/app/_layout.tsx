@@ -16,21 +16,13 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  return <Stack screenOptions={{ headerShown: false }}><Stack.Screen name="(tabs)" /></Stack>;
+  return <Stack screenOptions={{ headerShown: false }}><Stack.Screen name="(tabs)" /><Stack.Screen name="response-checker" /><Stack.Screen name="hotspot" /></Stack>;
 }
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') SystemUI.setBackgroundColorAsync('#070708').catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (fontsLoaded || fontError) SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
-
+  useEffect(() => { if (Platform.OS !== 'web') SystemUI.setBackgroundColorAsync('#070708').catch(() => undefined); }, []);
+  useEffect(() => { if (fontsLoaded || fontError) SplashScreen.hideAsync(); }, [fontsLoaded, fontError]);
   if (!fontsLoaded && !fontError) return null;
-
   return <SafeAreaProvider><ErrorBoundary><QueryClientProvider client={queryClient}><AppStateProvider><GestureHandlerRootView style={{ flex: 1 }}><KeyboardProvider><StatusBar style="light" /><RootLayoutNav /></KeyboardProvider></GestureHandlerRootView></AppStateProvider></QueryClientProvider></ErrorBoundary></SafeAreaProvider>;
 }
