@@ -1,0 +1,354 @@
+I need to correct the Server, Config, and VPN Log behavior in Aries Tunnel.
+
+IMPORTANT:
+This is a USER-FACING VPN app.
+
+Normal users must NOT be able to create, edit, delete, rename, duplicate, import, or modify server configurations or VPN configs from the app.
+
+Servers and Configs are preconfigured by the app/admin/backend.
+
+The user should ONLY be able to:
+1. Select a server from the available server list.
+2. Select a config from the available config list.
+3. Start/connect the VPN.
+4. Stop/disconnect the VPN.
+5. View normal VPN connection logs/status.
+
+Do not expose configuration editing controls to the normal user.
+
+==================================================
+SERVER SELECTION
+==================================================
+
+The Home screen has a Server selector.
+
+When no server is selected:
+
+[server icon] Servers >
+
+Do NOT show:
+- United States
+- USA
+- a country flag
+- a default server
+- a server name
+
+When the user opens the Server list, show the available preconfigured servers.
+
+Example:
+
+🇯🇲 Jamaica Server
+🇹🇹 Trinidad Server
+🇸🇬 Singapore Stable
+🇺🇸 USA Server
+🇧🇷 Brazil Server
+🇩🇪 Germany Server
+
+The user can ONLY select one.
+
+Do not provide:
+- Add Server
+- Edit Server
+- Delete Server
+- Duplicate Server
+- Import Server
+- Server configuration editor
+
+After the user selects a server, Home should show:
+
+🇸🇬 SG Singapore Stable >
+
+Use the actual selected server's name and country.
+
+==================================================
+CONFIG SELECTION
+==================================================
+
+Configs work the same way.
+
+When no config is selected:
+
+[config icon] Configs >
+
+Do NOT show:
+- United States
+- a default config
+- a country flag
+- a config name
+
+When the user opens Configs, show the preconfigured configs.
+
+Example:
+
+🇯🇲 Jamaica Flow Unlimited 1
+🇹🇹 Trinidad Digicel 1
+🇯🇲 Jamaica Flow Unlimited 2
+🇺🇸 USA Config 1
+🇸🇬 Singapore Config 1
+
+The user can ONLY select one.
+
+There must NOT be any normal-user controls for:
+
+- Add Config
+- Edit Config
+- Delete Config
+- Rename Config
+- Duplicate Config
+- Import Config
+- Modify protocol
+- Modify server address
+- Modify UUID
+- Modify password
+- Modify TLS
+- Modify proxy
+- Modify payload
+- Modify any underlying configuration
+
+The configuration data is controlled by the application's preconfigured server/config data.
+
+==================================================
+IMPORTANT: SERVER AND CONFIG ARE INDEPENDENT
+==================================================
+
+Keep these as separate selections:
+
+selectedServer
+selectedConfig
+
+They should not automatically overwrite each other.
+
+Example:
+
+selectedServer:
+🇸🇬 SG Singapore Stable
+
+selectedConfig:
+🇯🇲 Jamaica Flow Unlimited 1
+
+The Home screen should show:
+
+🇸🇬 SG Singapore Stable >
+
+🇯🇲 Jamaica Flow Unlimited 1 >
+
+When the user changes the server, only selectedServer changes.
+
+When the user changes the config, only selectedConfig changes.
+
+==================================================
+CONNECT BUTTON
+==================================================
+
+The user should be able to connect using:
+
+Selected Server
++
+Selected Config
+
+The connection process should use the actual configuration associated with the selected config and the selected server.
+
+Do not create fake/demo connection behavior.
+
+Before connecting, check that a valid server and config have been selected.
+
+If either is missing, show a simple message such as:
+
+"Please select a server and configuration."
+
+When both are selected, start the actual VPN connection through the existing tunnel implementation.
+
+==================================================
+VPN LOGS
+==================================================
+
+I want the Logs screen to behave like a normal VPN application's connection log.
+
+DO NOT turn the Logs screen into a packet sniffer, HTTP debugger, payload debugger, TLS scanner, or traffic dump.
+
+Only show useful VPN connection lifecycle information.
+
+For example:
+
+[08:41:02] Starting VPN connection...
+[08:41:03] Server: SG Singapore Stable
+[08:41:03] Configuration: Jamaica Flow Unlimited 1
+[08:41:04] Connecting...
+[08:41:05] Establishing tunnel...
+[08:41:07] VPN connected
+[08:41:07] Protected connection established
+
+When disconnecting:
+
+[09:12:20] Disconnecting VPN...
+[09:12:21] VPN disconnected
+
+If connection fails:
+
+[09:15:02] Starting VPN connection...
+[09:15:03] Connecting...
+[09:15:08] VPN connection failed
+[09:15:08] Reason: Connection timeout
+
+If authentication fails:
+
+[09:20:01] Connecting...
+[09:20:03] VPN connection failed
+[09:20:03] Reason: Authentication failed
+
+If DNS/network/server failure occurs, show a concise useful reason.
+
+==================================================
+LOGS MUST NOT SHOW UNNECESSARY DATA
+==================================================
+
+Do NOT continuously log:
+
+- Every packet
+- Every HTTP request
+- Every DNS query
+- Every website visited
+- Every IP connection
+- Raw payload data
+- Full request/response bodies
+- Passwords
+- Private keys
+- UUIDs unnecessarily
+- Authentication credentials
+- Sensitive configuration values
+
+The log should only describe the VPN's connection state.
+
+Use normal VPN states such as:
+
+IDLE
+CONNECTING
+CONNECTED
+DISCONNECTING
+DISCONNECTED
+FAILED
+
+==================================================
+HOME VPN STATUS
+==================================================
+
+The Home screen should clearly reflect the VPN state.
+
+Disconnected:
+
+START
+DISCONNECTED
+
+Connecting:
+
+CONNECTING...
+
+Connected:
+
+CONNECTED
+
+Failed:
+
+CONNECTION FAILED
+
+Do not show CONNECTED until the underlying VPN/tunnel implementation has actually confirmed the connection.
+
+Do not show a successful connection just because the configuration was accepted.
+
+==================================================
+SERVER/CONFIG DATA SECURITY
+==================================================
+
+Treat server and configuration definitions as read-only from the normal user interface.
+
+The UI should receive the available server/config records from the existing data source.
+
+Users can select them but cannot modify them.
+
+If an admin/backend system exists, configuration management can remain there.
+
+Do not expose admin functionality inside the normal VPN UI.
+
+==================================================
+HOME SCREEN INITIAL STATE
+==================================================
+
+When the app first opens:
+
+[server icon] Servers >
+
+[config icon] Configs >
+
+No country.
+No flag.
+No server name.
+No config name.
+No default selection.
+
+After selecting a server:
+
+🇸🇬 SG Singapore Stable >
+
+[config icon] Configs >
+
+After selecting a config:
+
+🇸🇬 SG Singapore Stable >
+
+🇯🇲 Jamaica Flow Unlimited 1 >
+
+After selecting both:
+
+🇸🇬 SG Singapore Stable >
+
+🇯🇲 Jamaica Flow Unlimited 1 >
+
+START
+
+==================================================
+IMPORTANT UI RULE
+==================================================
+
+Do not add configuration-management buttons to the Home, Server, or Config selection screens.
+
+The user interface is strictly:
+
+SELECT SERVER
+SELECT CONFIG
+CONNECT VPN
+DISCONNECT VPN
+VIEW CONNECTION LOG
+
+That's it.
+
+==================================================
+FINAL REQUIREMENT
+==================================================
+
+Inspect the existing project before modifying it.
+
+Find:
+- current server model
+- current config model
+- server selection logic
+- config selection logic
+- VPN connection manager
+- VPN state handling
+- existing Logs screen
+
+Modify the existing implementation instead of creating duplicate systems.
+
+Make sure the selected server and selected config are passed correctly into the actual VPN connection process.
+
+Test:
+
+1. Fresh app → Servers / Configs only.
+2. Select server → server name + correct flag appears.
+3. Select config → config name + correct flag appears.
+4. Select both → both appear.
+5. Connect → logs show normal connection lifecycle.
+6. Successfully connect → log says VPN connected.
+7. Disconnect → log says VPN disconnected.
+8. Failed connection → log says VPN connection failed and gives a useful reason.
+9. No packet/HTTP/raw traffic spam in Logs.
+10. User cannot edit/add/delete server or config from the normal UI.
