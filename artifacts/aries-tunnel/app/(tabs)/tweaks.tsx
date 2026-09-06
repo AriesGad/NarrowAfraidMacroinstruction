@@ -4,7 +4,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Field, FieldLabel, RadioOption, SelectRow, ChipRow } from '@/components/FormFields';
-import { PrimaryButton, Screen, Surface } from '@/components/Primitives';
+import { PrimaryButton, Surface } from '@/components/Primitives';
 import { CustomTweakInput, Tweak, useAppState } from '@/context/AppStateContext';
 import { useColors } from '@/hooks/useColors';
 import { checkEndpoint } from '@/services/responseChecker';
@@ -79,7 +79,6 @@ export default function TweaksScreen() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [lastMessage, setLastMessage] = useState('');
@@ -182,7 +181,7 @@ export default function TweaksScreen() {
   const showError = remoteConfigStatus === 'error' && !hasConfigs;
 
   return (
-    <Screen scroll={false}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Custom header matching screenshot style */}
       <View style={[styles.headerBar, { backgroundColor: colors.card, paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable onPress={() => router.navigate('/')} hitSlop={12} style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
@@ -190,28 +189,23 @@ export default function TweaksScreen() {
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Select Tweak</Text>
         <View style={styles.headerRight}>
-          <Pressable onPress={() => setSearchOpen((v) => !v)} hitSlop={12} style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
-            <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={21} color={colors.foreground} />
-          </Pressable>
           <Pressable onPress={() => setMenuOpen(true)} hitSlop={12} style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
             <Ionicons name="ellipsis-vertical" size={20} color={colors.foreground} />
           </Pressable>
         </View>
       </View>
 
-      {searchOpen ? (
-        <View style={[styles.searchRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search configs..."
-            placeholderTextColor={colors.mutedForeground}
-            autoCapitalize="none"
-            style={[styles.searchInput, { color: colors.foreground, backgroundColor: colors.secondary, borderColor: colors.border }]}
-            autoFocus
-          />
-        </View>
-      ) : null}
+      {/* Always-visible search bar — instant filter as you type */}
+      <View style={[styles.searchRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search configs..."
+          placeholderTextColor={colors.mutedForeground}
+          autoCapitalize="none"
+          style={[styles.searchInput, { color: colors.foreground, backgroundColor: colors.secondary, borderColor: colors.border }]}
+        />
+      </View>
 
       <ScrollView ref={scrollRef} style={styles.scrollBody} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Remote config list — locked, matching screenshot */}
@@ -335,7 +329,7 @@ export default function TweaksScreen() {
           </View>
         </View>
       </Modal>
-    </Screen>
+    </View>
   );
 }
 
