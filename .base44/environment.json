@@ -2,5 +2,11 @@
   "previewPort": 3000,
   "healthPath": "/",
   "startCommand": "docker compose -f docker-compose.base44.yml up -d",
-  "secrets": []
+  "secrets": [
+    {
+      "name": "EXPO_PUBLIC_CONFIG_URL",
+      "description": "Public URL of the remote JSON file containing the locked config/tweak list. The app downloads configs from this URL on first launch and when the user taps 'Update Config'. See data/sample-remote-configs.json for the expected format.",
+      "requiredAtBoot": false
+    }
+  ]
 }

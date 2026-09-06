@@ -8,7 +8,8 @@ A pnpm monorepo (lockfile v9, Node 22+) whose main user-facing app is **aries-tu
 
 - The aries-tunnel app is **entirely client-side**: state lives in AsyncStorage / expo-secure-store; data comes from built-in catalogs (`data/serverCatalog.ts`, `data/tweakCatalog.ts`). It does NOT call the api-server.
 - The **api-server** (Express 5, port 5000) and **lib/db** (Drizzle/Postgres) are scaffolding — the DB schema is empty (`export {}`) and the API only exposes `/api/healthz`. They are not needed to render the app.
-- No external secrets are required to boot the app.
+- No external secrets are required to boot the app, but `EXPO_PUBLIC_CONFIG_URL` (declared as a Base44 secret) enables the locked remote config list on the Tweaks tab. Without it, the tab shows a "No configs loaded" state with an update button. See `data/sample-remote-configs.json` for the expected JSON format.
+- The Tweaks tab (`app/(tabs)/tweaks.tsx`) downloads locked configs from the remote URL via `services/remoteConfig.ts`, which auto-fixes common JSON malformations (trailing commas, missing brackets, unquoted keys, surrounding text). Configs are cached in AsyncStorage for offline use and auto-refresh on first launch + every 60s.
 - The **mockup-sandbox** package is an internal Vite component-preview tool, not the main app.
 
 ## How to run
