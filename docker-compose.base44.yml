@@ -8,6 +8,7 @@ services:
       - PORT=3000
       - EXPO_NO_TELEMETRY=1
       - EXPO_NO_TYPESCRIPT_SETUP=1
+      - BASE44_PUBLIC_HOST_SUFFIX=${BASE44_PUBLIC_HOST_SUFFIX}
     env_file:
       - ./.env.base44-defaults
       - /run/base44/app.env
