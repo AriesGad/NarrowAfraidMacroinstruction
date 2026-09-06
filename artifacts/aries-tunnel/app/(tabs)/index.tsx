@@ -2,22 +2,27 @@ import React, { useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, BackHandler, Image, Linking, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ModalShell } from '@/components/ModalShell';
-import { Pill, Screen } from '@/components/Primitives';
-import { useAppState } from '@/context/AppStateContext';
+import { Label, Pill, PrimaryButton, Screen, Surface } from '@/components/Primitives';
+import { RewardManager, useAppState } from '@/context/AppStateContext';
 import { useColors } from '@/hooks/useColors';
 
 export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { status, servers, configs, selectedServerId, selectedConfigId, selectServer, selectConfig, requestConnection, disconnect } = useAppState();
+  const { status, accessRemainingSeconds, isAccessExpired, servers, configs, selectedServerId, selectedConfigId, settings, configVersion, selectServer, selectConfig, toggleSetting, updateSetting, clearAppData, requestConnection, disconnect, updateConfig } = useAppState();
   const [menuOpen, setMenuOpen] = useState(false);
   const [serverPickerOpen, setServerPickerOpen] = useState(false);
   const [configPickerOpen, setConfigPickerOpen] = useState(false);
+  const [rewardOpen, setRewardOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [forwardEditor, setForwardEditor] = useState<'dns' | 'udp' | null>(null);
   const pulse = useSharedValue(1);
   const selectedServer = useMemo(() => servers.find((server) => server.id === selectedServerId), [servers, selectedServerId]);
   const selectedConfig = useMemo(() => configs.find((config) => config.id === selectedConfigId), [configs, selectedConfigId]);
@@ -42,13 +47,22 @@ export default function HomeScreen() {
     }
     requestConnection();
   };
+  const exitApp = () => {
+    if (Platform.OS === 'android') BackHandler.exitApp();
+    else Alert.alert('Exit Aries Tunnel', 'Use your device controls to close the app.');
+  };
+  const runConfigUpdate = async () => {
+    setActionMenuOpen(false);
+    const result = await updateConfig();
+    Alert.alert(result.success ? 'Config update' : 'Config update unavailable', result.message);
+  };
 
   return <Screen>
     <View style={[styles.dashboard, { paddingTop: Math.max(insets.top - 9, 0) }]}>
       <View style={styles.topBar}>
         <Pressable accessibilityLabel="Open VPN menu" onPress={() => setMenuOpen(true)} hitSlop={12} style={({ pressed }) => [styles.topIcon, pressed && styles.pressed]}><Ionicons name="menu-outline" size={23} color={colors.foreground} /></Pressable>
         <Text style={[styles.brand, { color: colors.foreground }]}>ARIES TUNNEL</Text>
-        <View style={styles.topIcon} />
+        <Pressable accessibilityLabel="Open app actions" onPress={() => setActionMenuOpen(true)} hitSlop={12} style={({ pressed }) => [styles.topIcon, pressed && styles.pressed]}><Ionicons name="ellipsis-vertical" size={20} color={colors.foreground} /></Pressable>
       </View>
       <View style={styles.trafficBar}><TrafficStat icon="cloud-download-outline" value="0 B" label="DOWNLOAD" colors={colors} /><View style={[styles.liveDot, { backgroundColor: connected ? colors.success : colors.primary }]} /><TrafficStat icon="cloud-upload-outline" value="0 B" label="UPLOAD" colors={colors} align="right" /></View>
 
@@ -66,18 +80,46 @@ export default function HomeScreen() {
 
       <Pressable onPress={() => setServerPickerOpen(true)} style={({ pressed }) => [styles.optionBar, { backgroundColor: colors.primary }, pressed && styles.pressed]}><View style={styles.optionIcon}><Ionicons name="server-outline" size={21} color={colors.primaryForeground} /></View><View style={styles.optionCopy}><Text style={styles.optionText}>{selectedServer ? selectedServer.flag + '  ' + selectedServer.name : 'Servers'}</Text><Text style={styles.optionMeta}>{selectedServer?.country ?? 'Select a server'}</Text></View><Ionicons name="chevron-forward" size={19} color={colors.primaryForeground} /></Pressable>
       <Pressable onPress={() => setConfigPickerOpen(true)} style={({ pressed }) => [styles.optionBar, { backgroundColor: colors.primary }, pressed && styles.pressed]}><View style={styles.optionIcon}><Ionicons name="layers-outline" size={21} color={colors.primaryForeground} /></View><View style={styles.optionCopy}><Text style={styles.optionText}>{selectedConfig ? selectedConfig.flag + '  ' + selectedConfig.name : 'Configs'}</Text><Text style={styles.optionMeta}>{selectedConfig?.country ?? 'Select a configuration'}</Text></View><Ionicons name="chevron-forward" size={19} color={colors.primaryForeground} /></Pressable>
+      <View style={[styles.timeBar, { backgroundColor: colors.primary }]}><View style={styles.timeCopy}><Ionicons name="time-outline" size={22} color={colors.primaryForeground} /><Text style={styles.timeText}>{isAccessExpired ? '00:00:00' : formatTime(accessRemainingSeconds)}</Text></View><Pressable onPress={() => setRewardOpen(true)} style={({ pressed }) => [styles.addTime, { backgroundColor: colors.background }, pressed && styles.pressed]}><Text style={[styles.addTimeText, { color: colors.foreground }]}>ADD TIME</Text><Ionicons name="add" size={16} color={colors.primary} /></Pressable></View>
       {failed ? <View style={[styles.statusNote, { borderColor: colors.border, backgroundColor: colors.accent }]}><Pill tone="red">CONNECTION FAILED</Pill><Text style={[styles.statusNoteText, { color: colors.accentForeground }]}>The VPN backend did not confirm a tunnel connection.</Text></View> : null}
     </View>
 
     <ModalShell visible={serverPickerOpen} title="Choose a server" subtitle="Select from the preconfigured servers available to this app." onClose={() => setServerPickerOpen(false)}><View style={styles.serverList}>{servers.map((server) => <Pressable key={server.id} testID={'home-server-' + server.id} onPress={() => { selectServer(server.id); setServerPickerOpen(false); }} style={({ pressed }) => [styles.serverOption, { backgroundColor: server.id === selectedServerId ? colors.accent : colors.secondary, borderColor: server.id === selectedServerId ? colors.primary : colors.border }, pressed && styles.pressed]}><View style={{ flex: 1 }}><Text style={[styles.serverName, { color: colors.foreground }]}>{server.flag}  {server.name}</Text><Text style={[styles.serverLocation, { color: colors.mutedForeground }]}>{server.country}</Text></View>{server.id === selectedServerId ? <Ionicons name="checkmark-circle" size={19} color={colors.primary} /> : null}</Pressable>)}</View></ModalShell>
     <ModalShell visible={configPickerOpen} title="Choose a configuration" subtitle="Select from the preconfigured configurations available to this app." onClose={() => setConfigPickerOpen(false)}><View style={styles.serverList}>{configs.map((config) => <Pressable key={config.id} testID={'home-config-' + config.id} onPress={() => { selectConfig(config.id); setConfigPickerOpen(false); }} style={({ pressed }) => [styles.serverOption, { backgroundColor: config.id === selectedConfigId ? colors.accent : colors.secondary, borderColor: config.id === selectedConfigId ? colors.primary : colors.border }, pressed && styles.pressed]}><View style={{ flex: 1 }}><Text style={[styles.serverName, { color: colors.foreground }]}>{config.flag}  {config.name}</Text><Text style={[styles.serverLocation, { color: colors.mutedForeground }]}>{config.country} • {config.connectionType}</Text></View>{config.id === selectedConfigId ? <Ionicons name="checkmark-circle" size={19} color={colors.primary} /> : null}</Pressable>)}</View></ModalShell>
+    <ModalShell visible={rewardOpen} title="Earn VPN access" subtitle="Watch a rewarded ad to receive 4 hours of VPN access. Time is only granted after the rewarded-ad SDK confirms the reward." onClose={() => setRewardOpen(false)}><View style={[styles.modalNote, { backgroundColor: colors.secondary }]}><Ionicons name="shield-checkmark-outline" size={22} color={colors.primary} /><Text style={[styles.modalNoteText, { color: colors.mutedForeground }]}>Google test rewarded-ad ID is configured for the future AdMob integration. No time is granted in this UI-only build.</Text></View><PrimaryButton title="REWARDED AD NOT CONNECTED" icon="lock-closed-outline" disabled onPress={async () => { const earned = await RewardManager.showRewardedAd(); if (earned) setRewardOpen(false); }} /></ModalShell>
+    <ModalShell visible={actionMenuOpen} title="App actions" subtitle="Aries Tunnel tools and app information." onClose={() => setActionMenuOpen(false)}><View style={styles.actionList}><MenuAction icon="cloud-download-outline" label="Update Config" colors={colors} onPress={() => { void runConfigUpdate(); }} /><MenuAction icon="information-circle-outline" label="About" colors={colors} onPress={() => { setActionMenuOpen(false); setAboutOpen(true); }} /><MenuAction icon="exit-outline" label="Exit" colors={colors} onPress={() => { setActionMenuOpen(false); exitApp(); }} /></View></ModalShell>
+    <ModalShell visible={aboutOpen} title="About Aries Tunnel" subtitle="Application information" onClose={() => setAboutOpen(false)}><View style={styles.aboutContent}><Image source={require('../../assets/images/icon.png')} style={styles.aboutLogo} /><Text style={[styles.aboutName, { color: colors.foreground }]}>Aries Tunnel</Text><Text style={[styles.aboutLine, { color: colors.mutedForeground }]}>App version {Constants.expoConfig?.version ?? '1.0.0'}</Text><Text style={[styles.aboutLine, { color: colors.mutedForeground }]}>Config version {configVersion}</Text></View></ModalShell>
+    <Modal visible={menuOpen} transparent animationType="none" onRequestClose={() => setMenuOpen(false)}><View style={styles.drawerRoot}><Pressable style={styles.drawerBackdrop} onPress={() => setMenuOpen(false)} /><View style={[styles.drawer, { backgroundColor: colors.card, paddingTop: insets.top + 14 }]}><View style={styles.drawerHeader}><View style={[styles.drawerMark, { backgroundColor: colors.primary }]}><Ionicons name="shield-checkmark" size={22} color={colors.primaryForeground} /></View><View style={{ flex: 1 }}><Text style={[styles.drawerBrand, { color: colors.foreground }]}>ARIES TUNNEL</Text><Text style={[styles.drawerSubtitle, { color: colors.mutedForeground }]}>VPN CONTROL CENTER</Text></View><Pressable onPress={() => setMenuOpen(false)} hitSlop={10}><Ionicons name="close" size={21} color={colors.mutedForeground} /></Pressable></View><ForwardToggle icon="git-network-outline" label="Forward DNS" value={settings.forwardDns} colors={colors} onToggle={() => toggleSetting('forwardDns')} onOpen={() => { if (!settings.forwardDns) toggleSetting('forwardDns'); setMenuOpen(false); setForwardEditor('dns'); }} /><ForwardToggle icon="share-social-outline" label="Forward UDP" value={settings.forwardUdp} colors={colors} onToggle={() => toggleSetting('forwardUdp')} onOpen={() => { if (!settings.forwardUdp) toggleSetting('forwardUdp'); setMenuOpen(false); setForwardEditor('udp'); }} /><DrawerToggle icon="hardware-chip-outline" label="CPU Wakelock" value={settings.cpuWakelock} onChange={() => toggleSetting('cpuWakelock')} colors={colors} /><DrawerAction icon="wifi-outline" label="Hotspot Share" colors={colors} onPress={() => { setMenuOpen(false); router.push('/hotspot'); }} /><View style={[styles.drawerDivider, { backgroundColor: colors.border }]} /><DrawerAction icon="list-outline" label="VPN Logs" colors={colors} onPress={() => { setMenuOpen(false); router.push('/(tabs)/logs'); }} /><DrawerAction icon="pulse-outline" label="Response Checker" colors={colors} onPress={() => { setMenuOpen(false); router.push('/response-checker'); }} /><DrawerAction icon="trash-outline" label="Clear App data" colors={colors} onPress={() => Alert.alert('Clear app data?', 'This resets access time, logs, selections, and local preferences.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => { clearAppData(); setMenuOpen(false); } }])} /><DrawerAction icon="warning-outline" label="Report Bug" colors={colors} onPress={() => Alert.alert('Report Bug', 'Bug reporting has not been configured yet.')} /><Text style={[styles.drawerFooter, { color: colors.mutedForeground }]}>Only use authorized VPN endpoints and credentials.</Text></View></View></Modal>
+    <ModalShell visible={forwardEditor !== null} title={forwardEditor === 'dns' ? 'Forward DNS' : 'Forward UDP'} subtitle="Saved locally for the authorized tunnel backend. These values do not create an unauthorized relay." onClose={() => setForwardEditor(null)}><View style={styles.forwardEditor}>{forwardEditor === 'dns' ? <><TextInput value={settings.customDns} onChangeText={(value) => updateSetting('customDns', value)} placeholder="Custom DNS servers (comma separated)" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.forwardInput, { color: colors.foreground, backgroundColor: colors.secondary, borderColor: colors.border }]} /><Text style={[styles.forwardHint, { color: colors.mutedForeground }]}>Example: 1.1.1.1, 8.8.8.8</Text></> : <><TextInput value={settings.customUdpHost} onChangeText={(value) => updateSetting('customUdpHost', value)} placeholder="Custom UDP host" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" style={[styles.forwardInput, { color: colors.foreground, backgroundColor: colors.secondary, borderColor: colors.border }]} /><TextInput value={settings.customUdpPort} onChangeText={(value) => updateSetting('customUdpPort', value.replace(/[^0-9]/g, ''))} placeholder="UDP port" placeholderTextColor={colors.mutedForeground} keyboardType="number-pad" style={[styles.forwardInput, { color: colors.foreground, backgroundColor: colors.secondary, borderColor: colors.border }]} /><Text style={[styles.forwardHint, { color: colors.mutedForeground }]}>Leave the host empty to use the server profile’s UDP settings.</Text></>}<PrimaryButton title="SAVE SETTINGS" icon="checkmark" onPress={() => setForwardEditor(null)} /></View></ModalShell>
 
-    <Modal visible={menuOpen} transparent animationType="none" onRequestClose={() => setMenuOpen(false)}><View style={styles.drawerRoot}><Pressable style={styles.drawerBackdrop} onPress={() => setMenuOpen(false)} /><View style={[styles.drawer, { backgroundColor: colors.card, paddingTop: insets.top + 14 }]}><View style={styles.drawerHeader}><View style={[styles.drawerMark, { backgroundColor: colors.primary }]}><Ionicons name="shield-checkmark" size={22} color={colors.primaryForeground} /></View><View style={{ flex: 1 }}><Text style={[styles.drawerBrand, { color: colors.foreground }]}>ARIES TUNNEL</Text><Text style={[styles.drawerSubtitle, { color: colors.mutedForeground }]}>VPN CONTROL CENTER</Text></View><Pressable onPress={() => setMenuOpen(false)} hitSlop={10}><Ionicons name="close" size={21} color={colors.mutedForeground} /></Pressable></View><Pressable onPress={() => { setMenuOpen(false); router.push('/(tabs)/logs'); }} style={({ pressed }) => [styles.drawerRow, pressed && styles.pressed]}><View style={[styles.drawerIcon, { backgroundColor: colors.secondary }]}><Ionicons name="list-outline" size={17} color={colors.primary} /></View><Text style={[styles.drawerLabel, { color: colors.foreground }]}>VPN Logs</Text><Ionicons name="chevron-forward" size={17} color={colors.mutedForeground} /></Pressable><Text style={[styles.drawerFooter, { color: colors.mutedForeground }]}>Server and configuration definitions are read-only.</Text></View></View></Modal>
   </Screen>;
+}
+
+function formatTime(total: number) {
+  const hours = Math.floor(total / 3600).toString().padStart(2, '0');
+  const minutes = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
+  const seconds = Math.floor(total % 60).toString().padStart(2, '0');
+  return hours + ':' + minutes + ':' + seconds;
 }
 
 function TrafficStat({ icon, value, label, colors, align = 'left' }: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string; colors: ReturnType<typeof useColors>; align?: 'left' | 'right' }) {
   return <View style={[styles.trafficStat, align === 'right' && styles.trafficRight]}><Ionicons name={icon} size={16} color={colors.mutedForeground} /><View><Text style={[styles.trafficValue, { color: colors.foreground }]}>{value}</Text><Text style={[styles.trafficLabel, { color: colors.mutedForeground }]}>{label}</Text></View></View>;
+}
+
+function DrawerToggle({ icon, label, value, onChange, colors }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: boolean; onChange: () => void; colors: ReturnType<typeof useColors> }) {
+  return <View style={styles.drawerRow}><View style={[styles.drawerIcon, { backgroundColor: colors.secondary }]}><Ionicons name={icon} size={17} color={colors.primary} /></View><Text style={[styles.drawerLabel, { color: colors.foreground }]}>{label}</Text><Switch value={value} onValueChange={onChange} trackColor={{ false: colors.secondary, true: colors.accent }} thumbColor={value ? colors.primary : colors.mutedForeground} /></View>;
+}
+
+function ForwardToggle({ icon, label, value, onToggle, onOpen, colors }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: boolean; onToggle: (value: boolean) => void; onOpen: () => void; colors: ReturnType<typeof useColors> }) {
+  return <Pressable onPress={onOpen} style={({ pressed }) => [styles.drawerRow, pressed && styles.pressed]}><View style={[styles.drawerIcon, { backgroundColor: colors.secondary }]}><Ionicons name={icon} size={17} color={colors.primary} /></View><Text style={[styles.drawerLabel, { color: colors.foreground }]}>{label}</Text>{value ? <Ionicons name="create-outline" size={17} color={colors.mutedForeground} /> : null}<Switch value={value} onValueChange={(nextValue) => { onToggle(nextValue); if (nextValue) onOpen(); }} trackColor={{ false: colors.secondary, true: colors.accent }} thumbColor={value ? colors.primary : colors.mutedForeground} /></Pressable>;
+}
+
+function MenuAction({ icon, label, colors, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; colors: ReturnType<typeof useColors>; onPress: () => void }) {
+  return <Pressable onPress={onPress} style={({ pressed }) => [styles.menuAction, { backgroundColor: colors.secondary }, pressed && styles.pressed]}><Ionicons name={icon} size={19} color={colors.primary} /><Text style={[styles.menuActionText, { color: colors.foreground }]}>{label}</Text><Ionicons name="chevron-forward" size={17} color={colors.mutedForeground} /></Pressable>;
+}
+
+function DrawerAction({ icon, label, colors, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; colors: ReturnType<typeof useColors>; onPress: () => void }) {
+  return <Pressable onPress={onPress} style={({ pressed }) => [styles.drawerRow, pressed && styles.pressed]}><View style={[styles.drawerIcon, { backgroundColor: colors.secondary }]}><Ionicons name={icon} size={17} color={colors.primary} /></View><Text style={[styles.drawerLabel, { color: colors.foreground }]}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
@@ -108,12 +150,29 @@ const styles = StyleSheet.create({
   optionCopy: { flex: 1 },
   optionText: { color: '#ffffff', fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.2 },
   optionMeta: { color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_500Medium', fontSize: 9, marginTop: 3, letterSpacing: 0.5 },
+  timeBar: { minHeight: 55, borderRadius: 28, paddingLeft: 16, paddingRight: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timeCopy: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  timeText: { color: '#ffffff', fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.5 },
+  addTime: { minHeight: 41, minWidth: 112, borderRadius: 22, paddingHorizontal: 14, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center' },
+  addTimeText: { fontFamily: 'Inter_700Bold', fontSize: 10, letterSpacing: 0.5 },
   statusNote: { marginTop: 14, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 9 },
   statusNoteText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 11, lineHeight: 16 },
   serverList: { gap: 9, marginTop: 16 },
   serverOption: { minHeight: 62, borderRadius: 15, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 10, flexDirection: 'row', alignItems: 'center' },
   serverName: { fontFamily: 'Inter_700Bold', fontSize: 14 },
   serverLocation: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 4 },
+  modalNote: { flexDirection: 'row', gap: 10, borderRadius: 16, padding: 14, marginVertical: 18 },
+  modalNoteText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18 },
+  actionList: { gap: 10 },
+  menuAction: { minHeight: 54, borderRadius: 16, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  menuActionText: { flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  aboutContent: { alignItems: 'center', paddingVertical: 8 },
+  aboutLogo: { width: 84, height: 84, borderRadius: 20, marginBottom: 14 },
+  aboutName: { fontFamily: 'Inter_700Bold', fontSize: 20 },
+  aboutLine: { fontFamily: 'Inter_400Regular', fontSize: 13, marginTop: 7 },
+  forwardEditor: { gap: 10, paddingTop: 14 },
+  forwardInput: { minHeight: 52, borderRadius: 15, borderWidth: 1, paddingHorizontal: 14, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  forwardHint: { fontFamily: 'Inter_400Regular', fontSize: 11, lineHeight: 17, marginBottom: 8 },
   drawerRoot: { flex: 1, flexDirection: 'row' },
   drawerBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.66)' },
   drawer: { width: '78%', height: '100%', paddingHorizontal: 20, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 24, shadowOffset: { width: 8, height: 0 }, elevation: 12 },
@@ -124,5 +183,6 @@ const styles = StyleSheet.create({
   drawerRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12 },
   drawerIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   drawerLabel: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13 },
+  drawerDivider: { height: 1, marginVertical: 11 },
   drawerFooter: { fontFamily: 'Inter_400Regular', fontSize: 10, lineHeight: 16, marginTop: 18, paddingBottom: 24 },
 });
