@@ -107,7 +107,7 @@ function fromServer(server: Server): FormState {
 
 export default function AddServerScreen() {
   const colors = useColors();
-  const { servers, customServers, selectedServerId, selectServer, addCustomServer, editCustomServer, deleteCustomServer } = useAppState();
+  const { customServers, selectedServerId, selectServer, addCustomServer, editCustomServer, deleteCustomServer } = useAppState();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -233,8 +233,6 @@ export default function AddServerScreen() {
         <Pressable onPress={() => { void runTest(server); }} hitSlop={8}><Ionicons name="flash-outline" size={18} color={colors.mutedForeground} /></Pressable>
         <Pressable testID={'delete-custom-server-' + server.id} onPress={() => confirmDelete(server)} hitSlop={8}><Ionicons name="trash-outline" size={18} color={colors.destructive} /></Pressable>
       </View>)}
-      <Text style={[styles.section, { color: colors.foreground, marginTop: 16 }]}>Built-in servers</Text>
-      {servers.filter((server) => !server.isCustom).map((server) => <Pressable key={server.id} testID={'server-' + server.id} onPress={() => selectServer(server.id)} style={({ pressed }) => [styles.item, { borderColor: server.id === selectedServerId ? colors.primary : colors.border, backgroundColor: server.id === selectedServerId ? colors.accent : colors.secondary }, pressed && styles.pressed]}><View style={styles.itemCopy}><Text style={[styles.itemName, { color: colors.foreground }]}>{server.flag}  {server.name}</Text><Text style={[styles.itemMeta, { color: colors.mutedForeground }]}>{server.country}</Text></View></Pressable>)}
     </Surface>
 
     <Surface>
