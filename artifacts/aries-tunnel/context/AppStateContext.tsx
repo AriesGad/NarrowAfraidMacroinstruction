@@ -44,6 +44,8 @@ export type Tweak = {
   provider: string;
   enabled: boolean;
   isCustom?: boolean;
+  category?: string;
+  note?: string;
 };
 
 export type AppLog = {
@@ -53,7 +55,7 @@ export type AppLog = {
   message: string;
 };
 
-type Settings = {
+export type Settings = {
   customTweak: boolean;
   forwardUdp: boolean;
   customUdpHost: string;
@@ -193,10 +195,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       if (!saved) return;
       try {
         const parsed = JSON.parse(saved) as Partial<AppStateData> & { customServer?: Server | null; selectedProfileId?: string | null };
-        const selectedServerId = typeof parsed.selectedServerId === 'string' && BUILT_IN_SERVERS.some((server) => server.id === parsed.selectedServerId && server.id !== 'random-fastest') ? parsed.selectedServerId : null;
+        const customServers = parsed.customServers ?? (parsed.customServer ? [parsed.customServer] : []);
+        const customTweaks = parsed.customTweaks ?? [];
+        const selectedServerId = typeof parsed.selectedServerId === 'string' && (BUILT_IN_SERVERS.some((server) => server.id === parsed.selectedServerId && server.id !== 'random-fastest') || customServers.some((server) => server.id === parsed.selectedServerId)) ? parsed.selectedServerId : null;
         const legacyConfigId = parsed.selectedConfigId ?? parsed.selectedProfileId;
-        const selectedConfigId = typeof legacyConfigId === 'string' && legacyConfigId !== 'tweak-sg-stable' && BUILT_IN_TWEAKS.some((config) => config.id === legacyConfigId) ? legacyConfigId : null;
-        setState({ ...DEFAULT_STATE, ...parsed, selectedServerId, selectedConfigId, logs: lifecycleLogs(parsed.logs), customServers: parsed.customServers ?? (parsed.customServer ? [parsed.customServer] : []), customTweaks: parsed.customTweaks ?? [], settings: { ...DEFAULT_STATE.settings, ...parsed.settings } });
+        const selectedConfigId = typeof legacyConfigId === 'string' && (BUILT_IN_TWEAKS.some((config) => config.id === legacyConfigId) || customTweaks.some((config) => config.id === legacyConfigId)) ? legacyConfigId : null;
+        setState({ ...DEFAULT_STATE, ...parsed, selectedServerId, selectedConfigId, logs: lifecycleLogs(parsed.logs), customServers, customTweaks, settings: { ...DEFAULT_STATE.settings, ...parsed.settings } });
       } catch {
         setState(DEFAULT_STATE);
       }
@@ -237,28 +241,62 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
   }, [state]);
 
-  const servers = useMemo(() => BUILT_IN_SERVERS.filter((server) => server.id !== 'random-fastest'), []);
-  const configs = useMemo(() => BUILT_IN_TWEAKS, []);
+  const servers = useMemo(() => [...BUILT_IN_SERVERS, ...state.customServers], [state.customServers]);
+  const configs = useMemo(() => [...BUILT_IN_TWEAKS, ...state.customTweaks], [state.customTweaks]);
   const tweaks = configs;
   const accessRemainingSeconds = Math.max(0, Math.floor(((state.accessExpiresAt ?? 0) - now) / 1000));
   const isAccessExpired = accessRemainingSeconds === 0;
 
   const findFastestServer = useCallback(async () => {
-    setFastestStatus('unavailable');
-    setFastestMessage('Select a configured server manually.');
-  }, []);
+    const candidates = [...BUILT_IN_SERVERS, ...state.customServers].filter((server) => server.id !== 'random-fastest' && Boolean(server.host) && server.host !== 'openvpn');
+    if (candidates.length === 0) {
+      setFastestStatus('unavailable');
+      setFastestMessage('No configured hosts to measure.');
+      return;
+    }
+    setFastestStatus('finding');
+    setFastestMessage('Finding fastest server...');
+    const timed = await Promise.all(candidates.map(async (server) => {
+      const started = Date.now();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        await fetch('https://' + server.host.replace(/^https?:\/\//i, ''), { method: 'HEAD', signal: controller.signal });
+        return { server, ms: Date.now() - started };
+      } catch {
+        return { server, ms: Number.POSITIVE_INFINITY };
+      } finally {
+        clearTimeout(timeout);
+      }
+    }));
+    const winner = timed.filter((item) => Number.isFinite(item.ms)).sort((a, b) => a.ms - b.ms)[0];
+    if (!winner) {
+      setFastestStatus('unavailable');
+      setFastestMessage('No reachable hosts. Select a server manually.');
+      return;
+    }
+    setState((current) => ({ ...current, selectedServerId: winner.server.id }));
+    setFastestStatus('selected');
+    setFastestMessage('Selected ' + winner.server.name + ' • ' + winner.ms + ' ms');
+  }, [state.customServers]);
 
   const selectServer = useCallback((serverId: string) => {
-    if (!servers.some((server) => server.id === serverId)) return;
     setFastestStatus('idle');
     setFastestMessage('');
-    setState((current) => ({ ...current, selectedServerId: serverId }));
-  }, [servers]);
+    setState((current) => {
+      const available = [...BUILT_IN_SERVERS.filter((server) => server.id !== 'random-fastest'), ...current.customServers];
+      if (!available.some((server) => server.id === serverId)) return current;
+      return { ...current, selectedServerId: serverId };
+    });
+  }, []);
 
   const selectConfig = useCallback((configId: string) => {
-    if (!configs.some((config) => config.id === configId)) return;
-    setState((current) => ({ ...current, selectedConfigId: configId }));
-  }, [configs]);
+    setState((current) => {
+      const available = [...BUILT_IN_TWEAKS, ...current.customTweaks];
+      if (!available.some((config) => config.id === configId)) return current;
+      return { ...current, selectedConfigId: configId };
+    });
+  }, []);
   const selectProfile = selectConfig;
   const toggleSetting = useCallback((key: keyof Settings) => setState((current) => ({ ...current, settings: { ...current.settings, [key]: !current.settings[key] } })), []);
   const updateSetting = useCallback(<K extends keyof Settings>(key: K, value: Settings[K]) => setState((current) => ({ ...current, settings: { ...current.settings, [key]: value } })), []);
@@ -290,7 +328,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     if (sshUsername) await SecureStore.setItemAsync(secureKey('username', id), sshUsername);
     if (sshPassword) await SecureStore.setItemAsync(secureKey('password', id), sshPassword);
     if (privateKey) await SecureStore.setItemAsync(secureKey('privateKey', id), privateKey);
-    setState((current) => ({ ...current, customServers: [...current.customServers, server] }));
+    setState((current) => ({ ...current, customServers: [...current.customServers, server], selectedServerId: id }));
   }, []);
 
   const editCustomServer = useCallback(async (id: string, input: CustomServerInput, sshUsername: string, sshPassword: string, privateKey: string) => {
@@ -298,7 +336,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     if (sshUsername) await SecureStore.setItemAsync(secureKey('username', id), sshUsername);
     if (sshPassword) await SecureStore.setItemAsync(secureKey('password', id), sshPassword);
     if (privateKey) await SecureStore.setItemAsync(secureKey('privateKey', id), privateKey);
-    setState((current) => ({ ...current, customServers: current.customServers.map((item) => item.id === id ? server : item) }));
+    setState((current) => ({ ...current, customServers: current.customServers.map((item) => item.id === id ? { ...server, hasCredentials: server.hasCredentials || item.hasCredentials, hasPrivateKey: server.hasPrivateKey || item.hasPrivateKey } : item) }));
   }, []);
 
   const deleteCustomServer = useCallback(async (id: string) => {
@@ -310,9 +348,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const testServer = useCallback((id: string) => {
     void id;
-  }, [servers]);
+  }, []);
 
-  const addCustomTweak = useCallback((input: CustomTweakInput) => setState((current) => ({ ...current, customTweaks: [...current.customTweaks, { ...input, id: 'custom-tweak-' + Date.now().toString(), provider: 'Local profile', enabled: Boolean(input.host), isCustom: true }] })), []);
+  const addCustomTweak = useCallback((input: CustomTweakInput) => setState((current) => {
+    const id = 'custom-tweak-' + Date.now().toString();
+    return { ...current, customTweaks: [...current.customTweaks, { ...input, id, provider: 'Local profile', enabled: Boolean(input.host), isCustom: true }], selectedConfigId: id };
+  }), []);
   const editCustomTweak = useCallback((id: string, input: CustomTweakInput) => setState((current) => ({ ...current, customTweaks: current.customTweaks.map((item) => item.id === id ? { ...input, id, provider: 'Local profile', enabled: Boolean(input.host), isCustom: true } : item) })), []);
   const duplicateTweak = useCallback((id: string) => setState((current) => { const source = current.customTweaks.find((item) => item.id === id); return source ? { ...current, customTweaks: [...current.customTweaks, { ...source, id: 'custom-tweak-' + Date.now().toString(), name: source.name + ' Copy' }] } : current; }), []);
   const deleteCustomTweak = useCallback((id: string) => setState((current) => ({ ...current, customTweaks: current.customTweaks.filter((item) => item.id !== id), selectedConfigId: current.selectedConfigId === id ? null : current.selectedConfigId })), []);

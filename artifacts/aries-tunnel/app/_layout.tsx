@@ -16,7 +16,7 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  return <Stack screenOptions={{ headerShown: false }}><Stack.Screen name="(tabs)" /><Stack.Screen name="response-checker" /><Stack.Screen name="hotspot" /></Stack>;
+  return <Stack screenOptions={{ headerShown: false }}><Stack.Screen name="(tabs)" /><Stack.Screen name="response-checker" /><Stack.Screen name="hotspot" /><Stack.Screen name="settings" /></Stack>;
 }
 
 export default function RootLayout() {

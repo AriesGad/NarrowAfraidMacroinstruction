@@ -7,10 +7,10 @@ import { useColors } from '@/hooks/useColors';
 
 export default function LogsScreen() {
   const colors = useColors();
-  const { logs, status } = useAppState();
+  const { logs, status, clearLogs } = useAppState();
   const statusLabel = status === 'connected' ? 'CONNECTED' : status === 'connecting' ? 'CONNECTING' : status === 'disconnecting' ? 'DISCONNECTING' : status === 'failed' ? 'FAILED' : 'DISCONNECTED';
   const statusTone = status === 'connected' ? 'green' : status === 'failed' ? 'red' : 'neutral';
-  return <Screen><Header eyebrow="Activity" title="VPN Logs" />
+  return <Screen><Header eyebrow="Activity" title="VPN Logs" action={logs.length ? 'Clear' : undefined} onAction={logs.length ? clearLogs : undefined} />
     <View style={styles.statusRow}><Pill tone={statusTone}>{statusLabel}</Pill><Text style={[styles.eventCount, { color: colors.mutedForeground }]}>{logs.length} events</Text></View>
     <Surface style={styles.logSurface}>{logs.length === 0 ? <View style={styles.empty}><Ionicons name="document-text-outline" size={27} color={colors.mutedForeground} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>No VPN events yet</Text><Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>Connection lifecycle messages will appear here.</Text></View> : logs.map((entry) => <View key={entry.id} style={[styles.logRow, { borderBottomColor: colors.border }]}><View style={styles.logMeta}><Text style={[styles.logType, { color: entry.type === 'FAILED' ? colors.primary : colors.foreground }]}>{entry.type}</Text><Text style={[styles.logTime, { color: colors.mutedForeground }]}>{new Date(entry.time).toLocaleTimeString()}</Text></View><Text style={[styles.logMessage, { color: colors.mutedForeground }]}>{entry.message}</Text></View>)}</Surface>
   </Screen>;
