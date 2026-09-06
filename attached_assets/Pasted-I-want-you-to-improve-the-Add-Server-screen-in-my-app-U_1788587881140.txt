@@ -1,0 +1,245 @@
+I want you to improve the "Add Server" screen in my app.
+
+Use the attached screenshot as the UI/UX reference for the Tunnel selector.
+
+Create a dynamic Tunnel dropdown/selector with these options:
+
+1. OPENVPN
+2. SSH
+3. V2RAY
+4. DNSTT
+5. UDP HYSTERIA
+
+When the user selects a tunnel type, dynamically change the configuration fields underneath so they match that tunnel type.
+
+IMPORTANT:
+- Do not show irrelevant fields.
+- Do not require the user to manually configure fields that don't apply to the selected protocol.
+- Keep the existing design/theme and make the new UI match the screenshot.
+- The selected tunnel type should remain selected when editing a server.
+- Validate required fields before allowing the user to save.
+- Show helpful labels, placeholders, and info icons/tooltips where appropriate.
+- Store the selected protocol and all its configuration values in the server configuration.
+
+V2RAY:
+
+When V2RAY is selected, show a second dropdown called "V2Ray Profile" with:
+
+- V2Ray Default
+- VLESS
+- VMess
+- Shadowsocks
+- Socks
+- HTTP
+- Trojan
+- Hysteria2
+- WireGuard
+
+When the user changes the V2Ray Profile, dynamically change the fields to match the selected protocol.
+
+For example:
+
+VLESS:
+- Server / Address
+- Port
+- UUID
+- Encryption
+- Network
+- Security
+- SNI / Server Name
+- Fingerprint
+- Public Key
+- Short ID
+- Path
+- Host
+- Flow
+
+VMess:
+- Server / Address
+- Port
+- UUID
+- Alter ID (only if supported by the implementation)
+- Security
+- Network
+- TLS
+- SNI
+- Host
+- Path
+
+Shadowsocks:
+- Server / Address
+- Port
+- Method
+- Password
+- Network
+- TLS (if supported)
+
+SOCKS:
+- Server / Address
+- Port
+- Username
+- Password
+
+HTTP:
+- Server / Address
+- Port
+- Username
+- Password
+- TLS/HTTPS option
+
+Trojan:
+- Server / Address
+- Port
+- Password
+- SNI
+- TLS
+- Network
+- Path
+- Host
+
+Hysteria2:
+- Server / Address
+- Port
+- Password
+- SNI
+- TLS
+- Obfuscation settings if supported by the implementation
+
+WireGuard:
+- Server / Endpoint
+- Port
+- Private Key
+- Public Key
+- Address
+- DNS
+- MTU
+- Allowed IPs
+
+OPENVPN:
+
+When OPENVPN is selected, show fields appropriate for an OpenVPN configuration, such as:
+- Server / Address
+- Port
+- Protocol (TCP/UDP)
+- Username
+- Password
+- CA certificate
+- Client certificate
+- Client key
+- TLS/auth settings
+- Configuration/import option
+
+Also provide an "Import .ovpn Config" option if the app supports importing OpenVPN files.
+
+SSH:
+
+When SSH is selected, show:
+- Server / Host
+- Port
+- Username
+- Authentication method
+- Password OR private key
+- SSH key field/import option
+- Optional proxy settings if supported
+
+DNSTT:
+
+When DNSTT is selected, show only the configuration fields actually required by the DNSTT implementation, such as:
+- Server
+- Port
+- Domain
+- Public key / server key if required
+- Authentication/configuration values required by the implementation
+
+UDP HYSTERIA:
+
+When UDP HYSTERIA is selected, show fields appropriate for the Hysteria implementation:
+- Server / Address
+- Port
+- Authentication/password
+- SNI
+- TLS settings
+- Obfuscation settings if supported
+- Protocol-specific options required by the implementation
+
+UI BEHAVIOR:
+
+The screen should work like this:
+
+Tunnel: [ V2RAY ▼ ]
+
+If V2RAY is selected:
+    V2Ray Profile: [ VLESS ▼ ]
+
+Then show only the VLESS fields.
+
+If the user changes:
+    V2Ray Profile: [ VMess ▼ ]
+
+Immediately replace the VLESS fields with VMess fields.
+
+If the user changes:
+    Tunnel: [ SSH ▼ ]
+
+Hide the V2Ray Profile dropdown and show the SSH fields.
+
+If the user changes:
+    Tunnel: [ OPENVPN ▼ ]
+
+Hide V2Ray fields and show OpenVPN fields.
+
+Make the fields update instantly without reloading the entire screen.
+
+DATA STRUCTURE:
+
+Use a clean protocol-based configuration structure rather than putting every possible field into one flat object.
+
+For example:
+
+{
+  "name": "My Server",
+  "tunnel": "v2ray",
+  "profile": "vless",
+  "config": {
+    "address": "",
+    "port": "",
+    "uuid": "",
+    "security": "",
+    "network": "",
+    "sni": "",
+    "fingerprint": "",
+    "publicKey": "",
+    "shortId": "",
+    "path": "",
+    "host": "",
+    "flow": ""
+  }
+}
+
+For SSH, OpenVPN, DNSTT, and Hysteria use their own appropriate config objects.
+
+IMPORTANT IMPLEMENTATION REQUIREMENTS:
+
+1. Build reusable components for protocol-specific forms.
+2. Use conditional rendering based on the selected tunnel/profile.
+3. Preserve entered values when switching between options where practical.
+4. Validate fields according to the selected protocol.
+5. Do not save fields that don't belong to the selected protocol.
+6. Make the configuration editable after saving.
+7. Make the dropdown visually match the screenshot.
+8. Make the form responsive for Android/mobile screens.
+9. Keep the existing Save button and server list functionality.
+10. Do not break any existing VPN/server functionality.
+11. Before changing the backend/data model, inspect the existing project and adapt this to the current architecture rather than replacing working code.
+12. If a protocol is not actually implemented by the current VPN engine, do not pretend that the fields make it functional. Build the UI/config model and clearly connect it to the existing implementation where supported.
+
+First inspect the existing project structure and identify:
+- the Add Server screen
+- the server data model
+- the existing tunnel/protocol implementation
+- the existing V2Ray configuration parser
+- how servers are saved and loaded
+
+Then implement this feature using the project's existing framework and coding style.
+
+Do not create a separate demo page. Integrate it into the existing Add Server screen.

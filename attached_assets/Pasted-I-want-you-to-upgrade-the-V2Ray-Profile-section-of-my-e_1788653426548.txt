@@ -1,0 +1,495 @@
+I want you to upgrade the V2Ray Profile section of my existing "Add Server" screen.
+
+Use the attached screenshot as the UI reference.
+
+The V2Ray Profile dropdown must contain exactly these options:
+
+- V2Ray Default
+- VLESS
+- VMess
+- Shadowsocks
+- Socks
+- HTTP
+- Trojan
+- Hysteria2
+- WireGuard
+
+IMPORTANT:
+These must NOT be placeholder options.
+
+Every profile that the underlying tunnel engine supports must have:
+1. Its own configuration form.
+2. Its own validation.
+3. Its own configuration data structure.
+4. Correct conversion into the format required by the tunnel engine.
+5. Ability to save and reload the configuration.
+6. Ability to actually start/connect using the saved configuration.
+
+First inspect the existing project to determine which V2Ray/Xray/Sing-box/tunneling engine is currently being used. Do NOT replace the existing engine unless absolutely necessary.
+
+--------------------------------------------------
+V2RAY PROFILE DROPDOWN
+--------------------------------------------------
+
+Keep the current dark mobile UI.
+
+The dropdown should look like the screenshot:
+
+V2Ray Profile
+[ V2Ray Default                 ▼ ]
+
+When opened:
+
+V2Ray Default
+VLESS
+VMess
+Shadowsocks
+Socks
+HTTP
+Trojan
+Hysteria2
+WireGuard
+
+When a profile is selected, close the dropdown and immediately replace the configuration fields below it.
+
+--------------------------------------------------
+V2RAY DEFAULT
+--------------------------------------------------
+
+Show a general configuration form compatible with the existing V2Ray configuration parser.
+
+Include appropriate fields such as:
+
+- Server / Address
+- Port
+- UUID
+- Password
+- Encryption
+- Network
+- Security
+- SNI / Server Name
+- Host
+- Path
+- Flow
+- Fingerprint
+- Public Key
+- Short ID
+
+Only display fields that are actually applicable to the selected configuration.
+
+--------------------------------------------------
+VLESS
+--------------------------------------------------
+
+When VLESS is selected, show:
+
+Server / Address
+Port
+UUID
+Encryption
+Flow
+Network
+Security / TLS
+SNI / Server Name
+Fingerprint
+Public Key
+Short ID
+SpiderX / Spider Path if supported
+Host
+Path
+
+Provide dropdowns for fields with predefined values where appropriate.
+
+For example:
+
+Network:
+- TCP
+- WebSocket
+- gRPC
+- HTTP/2
+- QUIC
+- Other values supported by the existing engine
+
+Security:
+- None
+- TLS
+- Reality
+
+Only show Reality-specific fields when Reality is selected.
+
+For Reality show:
+- SNI
+- Fingerprint
+- Public Key
+- Short ID
+- SpiderX
+
+For WebSocket show:
+- Path
+- Host
+
+For gRPC show:
+- Service Name
+
+Do not show irrelevant fields.
+
+--------------------------------------------------
+VMESS
+--------------------------------------------------
+
+When VMess is selected, show:
+
+Server / Address
+Port
+UUID
+Alter ID only if supported by the current engine
+Security
+Network
+TLS
+SNI
+Fingerprint if supported
+Host
+Path
+Service Name if applicable
+
+Network-specific fields should appear dynamically.
+
+WebSocket:
+- Path
+- Host
+
+gRPC:
+- Service Name
+
+--------------------------------------------------
+SHADOWSOCKS
+--------------------------------------------------
+
+When Shadowsocks is selected, show:
+
+Server / Address
+Port
+Method
+Password
+Network/plugin options only if supported
+
+Method should be a dropdown populated from methods actually supported by the current tunnel engine.
+
+Do not display unsupported encryption methods.
+
+--------------------------------------------------
+SOCKS
+--------------------------------------------------
+
+When Socks is selected, show:
+
+Server / Address
+Port
+Username
+Password
+UDP option if supported
+
+Allow username/password to be optional if the implementation supports unauthenticated SOCKS.
+
+--------------------------------------------------
+HTTP
+--------------------------------------------------
+
+When HTTP is selected, show:
+
+Server / Address
+Port
+Username
+Password
+TLS / HTTPS option if supported
+
+Username and password should be optional if the implementation supports anonymous HTTP proxy connections.
+
+--------------------------------------------------
+TROJAN
+--------------------------------------------------
+
+When Trojan is selected, show:
+
+Server / Address
+Port
+Password
+Security / TLS
+SNI
+Fingerprint if supported
+Network
+Host
+Path
+Service Name if applicable
+
+If TLS is enabled, show the TLS-related fields.
+
+If WebSocket is selected:
+- Path
+- Host
+
+If gRPC is selected:
+- Service Name
+
+--------------------------------------------------
+HYSTERIA2
+--------------------------------------------------
+
+When Hysteria2 is selected, show fields supported by the actual Hysteria2 implementation:
+
+Server / Address
+Port
+Password / Authentication
+SNI
+TLS options
+Obfuscation if supported
+ALPN if supported
+Fast Open if supported
+Other protocol-specific settings supported by the current engine
+
+Do not create fake fields that the engine cannot use.
+
+--------------------------------------------------
+WIREGUARD
+--------------------------------------------------
+
+When WireGuard is selected, show:
+
+Server / Endpoint
+Port
+Private Key
+Public Key
+Client Address
+DNS
+MTU
+Allowed IPs
+Persistent Keepalive if supported
+
+Make sure the resulting configuration is converted into the format expected by the actual WireGuard implementation.
+
+IMPORTANT:
+WireGuard is not a traditional V2Ray protocol. If the existing engine cannot run WireGuard, integrate it through the appropriate existing VPN/tunnel engine instead of pretending it is a V2Ray configuration.
+
+--------------------------------------------------
+DYNAMIC FIELD BEHAVIOR
+--------------------------------------------------
+
+The form must dynamically react to selections.
+
+Example:
+
+V2Ray Profile: VLESS
+
+shows VLESS fields.
+
+If the user changes:
+
+V2Ray Profile: VMess
+
+immediately replace the VLESS fields with VMess fields.
+
+If the user changes:
+
+V2Ray Profile: Shadowsocks
+
+show only Shadowsocks fields.
+
+If the user changes:
+
+V2Ray Profile: Trojan
+
+show only Trojan fields.
+
+Do NOT reload the page.
+
+Do NOT lose previously entered values unnecessarily.
+
+Maintain separate configuration state for each profile while the user is editing when practical.
+
+--------------------------------------------------
+IMPORT CONFIG
+--------------------------------------------------
+
+The screenshot has an Import Config button.
+
+Keep this button.
+
+When importing a supported configuration such as:
+
+vless://
+vmess://
+trojan://
+ss://
+socks://
+http://
+
+parse the configuration and automatically:
+
+1. Detect the protocol.
+2. Select the correct V2Ray Profile.
+3. Populate the appropriate fields.
+4. Validate the imported values.
+5. Allow the user to edit them.
+6. Save them in the app's normal server configuration format.
+
+If the project already has an import parser, extend it rather than creating a duplicate parser.
+
+--------------------------------------------------
+CONFIG / CODE BUTTON
+--------------------------------------------------
+
+Keep the existing </> configuration/code button.
+
+When clicked, allow the user to view the generated configuration for the selected profile.
+
+The generated configuration must come from the actual entered fields.
+
+Do not display hard-coded example configurations.
+
+If the current engine uses JSON, generate valid JSON.
+
+If it uses another format, generate the format expected by that engine.
+
+--------------------------------------------------
+SAVE
+--------------------------------------------------
+
+When Save is pressed:
+
+1. Validate the selected profile.
+2. Validate required fields.
+3. Show a clear error for missing/invalid values.
+4. Save only the fields relevant to the selected profile.
+5. Save the selected tunnel type.
+6. Save the selected V2Ray profile.
+7. Save the complete protocol configuration.
+8. Make sure the server can be loaded again later with all fields restored.
+
+Example data structure:
+
+{
+  "name": "My VLESS Server",
+  "tunnel": "v2ray",
+  "profile": "vless",
+  "config": {
+    "address": "example.com",
+    "port": 443,
+    "uuid": "...",
+    "encryption": "none",
+    "network": "ws",
+    "security": "tls",
+    "sni": "example.com",
+    "host": "example.com",
+    "path": "/path"
+  }
+}
+
+Use an appropriate structure for every other protocol.
+
+--------------------------------------------------
+ACTUAL CONNECTION
+--------------------------------------------------
+
+This is very important:
+
+Do NOT stop at creating the UI.
+
+Trace the saved server configuration all the way through the application to the tunnel connection code.
+
+When the user selects a profile and starts the VPN/tunnel:
+
+UI
+↓
+Saved server configuration
+↓
+Protocol configuration
+↓
+Configuration parser/converter
+↓
+Actual tunnel engine
+↓
+Connection
+
+Make sure the selected profile reaches the actual connection code.
+
+If a protocol is not supported by the current engine, clearly identify that limitation and implement it using an appropriate existing engine in the project if one is already available.
+
+Never make an unsupported protocol appear to be functional when it isn't.
+
+--------------------------------------------------
+SECURITY / CERTIFICATE HANDLING
+--------------------------------------------------
+
+Do not disable TLS certificate verification globally just to make configurations connect.
+
+Keep certificate/security settings controlled by the selected configuration and the existing engine's supported options.
+
+--------------------------------------------------
+UI
+--------------------------------------------------
+
+Match the screenshot:
+
+- Dark theme
+- Rounded cards
+- Rounded text fields
+- Mobile-friendly layout
+- Same general spacing
+- Same typography hierarchy
+- Blue/gray selected controls
+- Dropdown arrows
+- Info icons
+- Clipboard/import button
+- Code/config button
+- Save button
+- Servers button
+
+The form should scroll correctly when many protocol-specific fields are displayed.
+
+Do not allow the dropdown to render off-screen on small Android displays.
+
+--------------------------------------------------
+IMPORTANT DEVELOPMENT PROCESS
+--------------------------------------------------
+
+Before modifying code:
+
+1. Inspect the entire existing Add Server implementation.
+2. Find the server model/storage.
+3. Find the V2Ray configuration model.
+4. Find the import parser.
+5. Find the code that starts the tunnel.
+6. Identify the actual underlying tunnel engine.
+7. Determine which of the listed protocols are already supported.
+8. Reuse existing code wherever possible.
+
+Then implement the dynamic profile system.
+
+Do not create a fake/demo implementation.
+
+After implementation, test every profile individually:
+
+V2Ray Default
+VLESS
+VMess
+Shadowsocks
+Socks
+HTTP
+Trojan
+Hysteria2
+WireGuard
+
+For each one verify:
+
+- Dropdown selection works.
+- Correct fields appear.
+- Incorrect fields disappear.
+- Required fields validate.
+- Configuration saves.
+- Configuration reloads.
+- Import works where supported.
+- Generated configuration is correct.
+- The selected profile reaches the actual tunnel connection code.
+- Existing SSH/OpenVPN/DNSTT functionality is not broken.
+
+If a profile cannot be supported by the current engine, tell me exactly which engine limitation prevents it and do not claim it is working.

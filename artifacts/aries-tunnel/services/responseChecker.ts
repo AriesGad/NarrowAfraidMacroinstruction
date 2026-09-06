@@ -6,6 +6,9 @@ export type ResponseCheckInput = {
   proxyPort: string;
   customHeaders: string;
   method: 'GET' | 'POST' | 'HEAD' | 'DELETE' | 'OPTIONS' | 'PATCH';
+  proxyEnabled?: boolean;
+  ipInfoEnabled?: boolean;
+  cdnFinderEnabled?: boolean;
 };
 
 export type ResponseCheckResult = {
@@ -16,6 +19,8 @@ export type ResponseCheckResult = {
   hostnameResult: string;
   redirect: string;
   headers: string[];
+  ipInfo?: string;
+  cdnInfo?: string;
   error?: string;
 };
 
@@ -35,7 +40,7 @@ function buildUrl(input: ResponseCheckInput) {
 
 function parseHeaders(raw: string) {
   const headers: Record<string, string> = {};
-  raw.split('\\n').forEach((line) => {
+  raw.split('\n').forEach((line) => {
     const separator = line.indexOf(':');
     if (separator > 0) {
       const key = line.slice(0, separator).trim();
@@ -48,6 +53,7 @@ function parseHeaders(raw: string) {
 
 export async function checkEndpoint(input: ResponseCheckInput): Promise<ResponseCheckResult> {
   const url = buildUrl(input);
+  if (input.proxyEnabled && !input.proxyHost.trim()) throw new Error('Enter a proxy host or turn Proxy off.');
   const started = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
@@ -58,6 +64,19 @@ export async function checkEndpoint(input: ResponseCheckInput): Promise<Response
       const value = response.headers.get(name);
       return value ? name + ': ' + value : '';
     }).filter(Boolean);
+    const cdnHeader = ['cf-ray', 'cf-cache-status', 'x-cache', 'x-served-by', 'via', 'server'].find((name) => response.headers.get(name));
+    let ipInfo: string | undefined;
+    if (input.ipInfoEnabled) {
+      try {
+        const hostname = new URL(url).hostname;
+        const dnsResponse = await fetch('https://dns.google/resolve?name=' + encodeURIComponent(hostname) + '&type=A', { headers: { accept: 'application/dns-json' }, signal: controller.signal });
+        const dnsPayload = await dnsResponse.json() as { Answer?: Array<{ data?: string }> };
+        const addresses = (dnsPayload.Answer ?? []).map((answer) => answer.data).filter((address): address is string => Boolean(address));
+        ipInfo = addresses.length ? addresses.join(', ') : 'No public IPv4 address returned';
+      } catch {
+        ipInfo = 'DNS lookup unavailable';
+      }
+    }
     return {
       reachable: true,
       statusCode: response.status,
@@ -66,6 +85,8 @@ export async function checkEndpoint(input: ResponseCheckInput): Promise<Response
       hostnameResult: input.sni.trim() ? 'SNI requested: ' + input.sni.trim() : 'Default hostname used',
       redirect: response.url !== url ? 'Redirected to ' + response.url : 'No redirect detected',
       headers: headerSummary,
+      ipInfo,
+      cdnInfo: input.cdnFinderEnabled ? (cdnHeader ? 'Detected via ' + cdnHeader : 'No common CDN headers detected') : undefined,
     };
   } catch (error) {
     return {

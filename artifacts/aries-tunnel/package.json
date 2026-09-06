@@ -56,6 +56,7 @@
   },
   "dependencies": {
     "expo-clipboard": "~57.0.1",
+    "expo-keep-awake": "~57.0.1",
     "expo-network": "~57.0.1",
     "expo-secure-store": "~57.0.3"
   }

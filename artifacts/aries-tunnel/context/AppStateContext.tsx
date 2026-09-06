@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Network from 'expo-network';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BUILT_IN_SERVERS } from '@/data/serverCatalog';
 import { BUILT_IN_TWEAKS } from '@/data/tweakCatalog';
 
@@ -55,14 +56,20 @@ export type AppLog = {
 type Settings = {
   customTweak: boolean;
   forwardUdp: boolean;
+  customUdpHost: string;
+  customUdpPort: string;
   notificationSound: boolean;
   vibrate: boolean;
   cpuWakelock: boolean;
   batteryOptimization: boolean;
   forwardDns: boolean;
+  customDns: string;
   mobileNetwork: boolean;
   shareHotspot: boolean;
 };
+
+export type V2RayProfile = 'V2Ray Default' | 'VLESS' | 'VMess' | 'Shadowsocks' | 'Socks' | 'HTTP' | 'Trojan' | 'Hysteria2' | 'WireGuard';
+export type V2RayProfileValues = Record<string, string | number | boolean>;
 
 export type CustomServerConfig = {
   openvpnType?: string;
@@ -72,7 +79,8 @@ export type CustomServerConfig = {
   udpAlpn?: string;
   udpPortHoppingInterval?: number;
   udpAllowInsecure?: boolean;
-  v2rayProfile?: string;
+  v2rayProfile?: V2RayProfile;
+  v2rayProfiles?: Partial<Record<V2RayProfile, V2RayProfileValues>>;
   v2rayHost?: string;
   v2rayPort?: number;
   v2rayUuid?: string;
@@ -123,6 +131,7 @@ type AppStateContextValue = AppStateData & {
   findFastestServer: () => Promise<void>;
   selectProfile: (profileId: string) => void;
   toggleSetting: (key: keyof Settings) => void;
+  updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   requestConnection: () => void;
   disconnect: () => void;
   grantAccess: (hours: number) => void;
@@ -148,7 +157,7 @@ const DEFAULT_STATE: AppStateData = {
   accessExpiresAt: null,
   connectionStartedAt: null,
   configVersion: 'Local config',
-  settings: { customTweak: false, forwardUdp: true, notificationSound: true, vibrate: true, cpuWakelock: false, batteryOptimization: false, forwardDns: true, mobileNetwork: true, shareHotspot: false },
+  settings: { customTweak: false, forwardUdp: true, customUdpHost: '', customUdpPort: '7300', notificationSound: true, vibrate: true, cpuWakelock: false, batteryOptimization: false, forwardDns: true, customDns: '', mobileNetwork: true, shareHotspot: false },
   logs: [],
   customServers: [],
   customTweaks: [],
@@ -169,6 +178,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [now, setNow] = useState<number>(Date.now());
   const [fastestStatus, setFastestStatus] = useState<FastestStatus>('idle');
   const [fastestMessage, setFastestMessage] = useState('');
+  const wakeLockActive = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
@@ -186,6 +196,31 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (state.settings.cpuWakelock) {
+      activateKeepAwakeAsync('aries-tunnel').then(() => {
+        wakeLockActive.current = true;
+      }).catch(() => undefined);
+    } else if (wakeLockActive.current) {
+      try {
+        void deactivateKeepAwake('aries-tunnel');
+      } catch {
+        // Expo can throw if the native wake lock was already released.
+      }
+      wakeLockActive.current = false;
+    }
+    return () => {
+      if (wakeLockActive.current) {
+        try {
+          void deactivateKeepAwake('aries-tunnel');
+        } catch {
+          // Expo can throw if the native wake lock was already released.
+        }
+        wakeLockActive.current = false;
+      }
+    };
+  }, [state.settings.cpuWakelock]);
 
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => undefined);
@@ -224,6 +259,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const selectProfile = useCallback((profileId: string) => setState((current) => ({ ...current, selectedProfileId: profileId })), []);
   const toggleSetting = useCallback((key: keyof Settings) => setState((current) => ({ ...current, settings: { ...current.settings, [key]: !current.settings[key] } })), []);
+  const updateSetting = useCallback(<K extends keyof Settings>(key: K, value: Settings[K]) => setState((current) => ({ ...current, settings: { ...current.settings, [key]: value } })), []);
 
   const requestConnection = useCallback(() => {
     setState((current) => {
@@ -315,7 +351,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; clearInterval(timer); };
   }, [updateConfig]);
 
-  const value = useMemo<AppStateContextValue>(() => ({ ...state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig }), [state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig]);
+  const value = useMemo<AppStateContextValue>(() => ({ ...state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, updateSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig }), [state, servers, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectProfile, toggleSetting, updateSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig]);
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 

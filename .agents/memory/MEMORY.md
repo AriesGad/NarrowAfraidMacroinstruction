@@ -1,1 +1,2 @@
 - [Expo dependency installation](expo-dependency-install.md) — target the Expo workspace package explicitly when adding native modules.
+- [Expo wake-lock lifecycle](expo-wakelock-lifecycle.md) — only deactivate a tagged keep-awake lock after activation succeeds; initial cleanup can throw otherwise.
