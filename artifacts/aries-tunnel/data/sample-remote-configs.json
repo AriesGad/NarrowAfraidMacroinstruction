@@ -1,0 +1,76 @@
+{
+  "version": "1.0.0",
+  "message": "💫 New internet settings for 2026!",
+  "configs": [
+    {
+      "id": "jm-flow-1",
+      "name": "🇯🇲 Jamaica Flow Unlimited 1",
+      "flag": "🇯🇲",
+      "label": "WS",
+      "subtitle": "HTTP WebSocket",
+      "connectionType": "WebSocket",
+      "host": "flow.example.com",
+      "port": 443,
+      "sni": "sni.flow.example.com",
+      "proxyHost": "",
+      "proxyPort": 80,
+      "payloadConfiguration": "GET / HTTP/1.1[crlf]Host: [host][crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
+    },
+    {
+      "id": "jm-flow-2",
+      "name": "🇯🇲 Jamaica Flow Unlimited 2",
+      "flag": "🇯🇲",
+      "label": "WS",
+      "subtitle": "HTTP WebSocket",
+      "connectionType": "WebSocket",
+      "host": "flow2.example.com",
+      "port": 443,
+      "sni": "sni.flow2.example.com",
+      "proxyHost": "",
+      "proxyPort": 80,
+      "payloadConfiguration": "GET / HTTP/1.1[crlf]Host: [host][crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
+    },
+    {
+      "id": "ir-mci-wifi-1",
+      "name": "🇮🇷 Irancell MCI WiFi 🚀 PRO-1",
+      "flag": "🇮🇷",
+      "label": "CF",
+      "subtitle": "HTTP CloudFront",
+      "connectionType": "HTTP",
+      "host": "cf1.example.com",
+      "port": 443,
+      "sni": "",
+      "proxyHost": "",
+      "proxyPort": 0,
+      "payloadConfiguration": "GET / HTTP/1.1[crlf]Host: [host][crlf][crlf]"
+    },
+    {
+      "id": "ir-mci-wifi-2",
+      "name": "🇮🇷 Irancell MCI WiFi 🚀 PRO-2",
+      "flag": "🇮🇷",
+      "label": "CF",
+      "subtitle": "HTTP CloudFront",
+      "connectionType": "HTTP",
+      "host": "cf2.example.com",
+      "port": 443,
+      "sni": "",
+      "proxyHost": "",
+      "proxyPort": 0,
+      "payloadConfiguration": "GET / HTTP/1.1[crlf]Host: [host][crlf][crlf]"
+    },
+    {
+      "id": "ng-smile-1",
+      "name": "🇳🇬 Nigeria Smile Unlimited",
+      "flag": "🇳🇬",
+      "label": "CF",
+      "subtitle": "Fast 2026",
+      "connectionType": "SSL/TLS",
+      "host": "smile.example.com",
+      "port": 443,
+      "sni": "smile.example.com",
+      "proxyHost": "",
+      "proxyPort": 0,
+      "payloadConfiguration": ""
+    }
+  ]
+}
