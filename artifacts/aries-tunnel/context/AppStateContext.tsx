@@ -5,6 +5,7 @@ import * as Network from 'expo-network';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BUILT_IN_SERVERS } from '@/data/serverCatalog';
 import { BUILT_IN_TWEAKS } from '@/data/tweakCatalog';
+import { downloadRemoteConfigs } from '@/services/remoteConfig';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'failed';
 export type FastestStatus = 'idle' | 'finding' | 'selected' | 'unavailable';
@@ -120,6 +121,8 @@ type AppStateData = {
   logs: AppLog[];
   customServers: Server[];
   customTweaks: Tweak[];
+  remoteConfigs: Tweak[];
+  remoteConfigMessage: string;
 };
 
 type AppStateContextValue = AppStateData & {
@@ -130,6 +133,7 @@ type AppStateContextValue = AppStateData & {
   isAccessExpired: boolean;
   fastestStatus: FastestStatus;
   fastestMessage: string;
+  remoteConfigStatus: 'idle' | 'loading' | 'loaded' | 'error' | 'offline';
   selectServer: (serverId: string) => void;
   findFastestServer: () => Promise<void>;
   selectConfig: (configId: string) => void;
@@ -165,6 +169,8 @@ const DEFAULT_STATE: AppStateData = {
   logs: [],
   customServers: [],
   customTweaks: [],
+  remoteConfigs: [],
+  remoteConfigMessage: '',
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -188,7 +194,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [now, setNow] = useState<number>(Date.now());
   const [fastestStatus, setFastestStatus] = useState<FastestStatus>('idle');
   const [fastestMessage, setFastestMessage] = useState('');
+  const [remoteConfigStatus, setRemoteConfigStatus] = useState<'idle' | 'loading' | 'loaded' | 'error' | 'offline'>('idle');
   const wakeLockActive = useRef(false);
+  const remoteConfigsCountRef = useRef(0);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
@@ -199,8 +207,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         const customTweaks = parsed.customTweaks ?? [];
         const selectedServerId = typeof parsed.selectedServerId === 'string' && (BUILT_IN_SERVERS.some((server) => server.id === parsed.selectedServerId && server.id !== 'random-fastest') || customServers.some((server) => server.id === parsed.selectedServerId)) ? parsed.selectedServerId : null;
         const legacyConfigId = parsed.selectedConfigId ?? parsed.selectedProfileId;
-        const selectedConfigId = typeof legacyConfigId === 'string' && (BUILT_IN_TWEAKS.some((config) => config.id === legacyConfigId) || customTweaks.some((config) => config.id === legacyConfigId)) ? legacyConfigId : null;
-        setState({ ...DEFAULT_STATE, ...parsed, selectedServerId, selectedConfigId, logs: lifecycleLogs(parsed.logs), customServers, customTweaks, settings: { ...DEFAULT_STATE.settings, ...parsed.settings } });
+        const remoteConfigs = Array.isArray(parsed.remoteConfigs) ? parsed.remoteConfigs : [];
+        const selectedConfigId = typeof legacyConfigId === 'string' && (remoteConfigs.some((config) => config.id === legacyConfigId) || BUILT_IN_TWEAKS.some((config) => config.id === legacyConfigId) || customTweaks.some((config) => config.id === legacyConfigId)) ? legacyConfigId : null;
+        setState({ ...DEFAULT_STATE, ...parsed, selectedServerId, selectedConfigId, logs: lifecycleLogs(parsed.logs), customServers, customTweaks, remoteConfigs, settings: { ...DEFAULT_STATE.settings, ...parsed.settings } });
+        if (remoteConfigs.length > 0) setRemoteConfigStatus('loaded');
       } catch {
         setState(DEFAULT_STATE);
       }
@@ -242,7 +252,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const servers = useMemo(() => [...BUILT_IN_SERVERS, ...state.customServers], [state.customServers]);
-  const configs = useMemo(() => [...BUILT_IN_TWEAKS, ...state.customTweaks], [state.customTweaks]);
+  remoteConfigsCountRef.current = state.remoteConfigs.length;
+  const configs = useMemo(() => [...state.remoteConfigs, ...BUILT_IN_TWEAKS, ...state.customTweaks], [state.remoteConfigs, state.customTweaks]);
   const tweaks = configs;
   const accessRemainingSeconds = Math.max(0, Math.floor(((state.accessExpiresAt ?? 0) - now) / 1000));
   const isAccessExpired = accessRemainingSeconds === 0;
@@ -292,7 +303,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const selectConfig = useCallback((configId: string) => {
     setState((current) => {
-      const available = [...BUILT_IN_TWEAKS, ...current.customTweaks];
+      const available = [...current.remoteConfigs, ...BUILT_IN_TWEAKS, ...current.customTweaks];
       if (!available.some((config) => config.id === configId)) return current;
       return { ...current, selectedConfigId: configId };
     });
@@ -362,23 +373,18 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const clearAppData = useCallback(() => { void Promise.all(state.customServers.flatMap((server) => [SecureStore.deleteItemAsync(secureKey('username', server.id)), SecureStore.deleteItemAsync(secureKey('password', server.id)), SecureStore.deleteItemAsync(secureKey('privateKey', server.id))])); setState(DEFAULT_STATE); }, [state.customServers]);
   const updateConfig = useCallback(async () => {
     const endpoint = process.env.EXPO_PUBLIC_CONFIG_URL?.trim();
-    if (!endpoint) return { success: false, message: 'Internet checks are ready, but a config endpoint has not been configured yet.' };
-    try {
-      const network = await Network.getNetworkStateAsync();
-      if (!network.isConnected || network.isInternetReachable === false) return { success: false, message: 'No internet connection is available. Try again when the device is online.' };
-      const response = await fetch(endpoint);
-      if (!response.ok) throw new Error('Config server returned HTTP ' + response.status + '.');
-      const payload = await response.json() as { version?: unknown };
-      const nextVersion = typeof payload.version === 'string' && payload.version.trim() ? payload.version.trim() : null;
-      if (!nextVersion) return { success: false, message: 'The config response did not include a valid version.' };
-      if (nextVersion === state.configVersion) return { success: true, message: 'Config is already up to date (' + nextVersion + ').' };
-       setState((current) => ({ ...current, configVersion: nextVersion }));
-      return { success: true, message: 'Config updated to version ' + nextVersion + '.' };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'The config update failed.';
-      return { success: false, message };
+    if (!endpoint) return { success: false, message: 'A config endpoint has not been configured yet. Set EXPO_PUBLIC_CONFIG_URL to enable remote configs.' };
+    setRemoteConfigStatus('loading');
+    const result = await downloadRemoteConfigs(endpoint);
+    if (result.success) {
+      setState((current) => ({ ...current, remoteConfigs: result.configs, remoteConfigMessage: result.message, configVersion: result.version }));
+      setRemoteConfigStatus('loaded');
+      return { success: true, message: result.message };
     }
-  }, [state.configVersion]);
+    // Keep previous configs on failure — only change status
+    setRemoteConfigStatus(remoteConfigsCountRef.current > 0 ? 'loaded' : 'error');
+    return { success: false, message: result.message };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -397,7 +403,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; clearInterval(timer); };
   }, [updateConfig]);
 
-  const value = useMemo<AppStateContextValue>(() => ({ ...state, servers, configs, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectConfig, selectProfile, toggleSetting, updateSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig }), [state, servers, configs, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, selectServer, findFastestServer, selectConfig, selectProfile, toggleSetting, updateSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig]);
+  const value = useMemo<AppStateContextValue>(() => ({ ...state, servers, configs, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, remoteConfigStatus, selectServer, findFastestServer, selectConfig, selectProfile, toggleSetting, updateSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig }), [state, servers, configs, tweaks, accessRemainingSeconds, isAccessExpired, fastestStatus, fastestMessage, remoteConfigStatus, selectServer, findFastestServer, selectConfig, selectProfile, toggleSetting, updateSetting, requestConnection, disconnect, grantAccess, addCustomServer, editCustomServer, deleteCustomServer, testServer, addCustomTweak, editCustomTweak, duplicateTweak, deleteCustomTweak, testTweak, clearLogs, clearAppData, updateConfig]);
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 
